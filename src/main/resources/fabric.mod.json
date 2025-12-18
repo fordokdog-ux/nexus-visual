@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "simplevisuals",
+  "version": "0.3",
+  "name": "Nexus Visual",
+  "description": "The best free visual mod",
+  "authors": ["Sh1ckOnly", "Allans"],
+  "contact": {},
+  "license": "MIT",
+  "icon": "assets/simplevisuals/logo.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "dev.simplevisuals.NexusVisual"
+    ]
+  },
+  "mixins": [
+    "nexusvisual.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.16.10",
+    "minecraft": "1.21.4"
+  }
+}

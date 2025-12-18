@@ -1,0 +1,53 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.simplevisuals.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "AspectRatioMixin",
+    "AttackEventMixin",
+    "AutoSprintMixin",
+    "HeldItemRendererMixin",
+    "HitSoundMixin",
+    "ItemEntityRendererMixin",
+    "KeyboardMixin",
+    "ClientPlayerInteractionManagerMixin",
+    "LimbAnimatorMixin",
+    "LivingEntityMixin",
+    "LivingEntityRendererMixin",
+    "MixinCapeFeatureRenderer",
+    "ParticleManagerMixin",
+    "accessors.IGameRenderer",
+    "accessors.IMinecraftClientSessionAccessor"
+  ],
+  "client": [
+    "BackgroundRendererMixin",
+    "BossBarHudMixin",
+    "ChatHudNameProtectMixin",
+    "ChatInputSuggestorMixin",
+    "ChatScreenMixin",
+    "ClientWorldPropertiesMixin",
+    "EntityRendererNameProtectMixin",
+    "GameRendererMixin",
+    "InGameHudMixin",
+    "InGameOverlayRendererMixin",
+    "ItemRendererMixin",
+    "LightmapTextureManagerMixin",
+    "MinecraftClientMixin",
+    "MixinTitleScreen",
+    "MouseMixin",
+    "ParticleManagerMixin",
+    "PlayerListHudNameProtectMixin",
+    "ScoreboardNameProtectMixin",
+    "WorldRendererMixin",
+    "EntityRenderDispatcherMixin",
+    "HandledScreenMixin",
+    "accessors.IWorldRenderer",
+    "CameraMixin",
+    "PlayerListHudMixin",
+    "PlayerListHudMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

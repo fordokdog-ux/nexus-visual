@@ -1,0 +1,8 @@
+{
+  "name": "nexus-visual-lic-vercel",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "pg": "^8.13.1"
+  }
+}
