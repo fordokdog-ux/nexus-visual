@@ -28,7 +28,6 @@
 
 ```powershell
 cd tools/vercel-lic
-npm install
 node .\keygen.js
 ```
 

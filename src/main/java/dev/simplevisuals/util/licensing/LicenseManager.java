@@ -27,7 +27,7 @@ public final class LicenseManager {
      *
      * Будет заполнено после генерации ключей для lic-server.
      */
-    public static final String PUBLIC_KEY_X509_BASE64 = "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA2r/UiGJvojORRDX30AVQovpv/n0A7i2TszSyW5DHwa8ZbgoyQq4aL/VEW7mpsnWEvGfTlE6nhGLB1JzOrtjc2kHgj+pq+s8INRUfhh5zjR3CXphBm8Yp8uP/m1Gt+deoG3NvJaYvRPp/useTAto3PvotzKc2WAxlN9SiYj3KQ/zG64PsFJNeQPrCiJlDXCd60sIn8PeTX/X5NMIaKz0u3SPxpORQGCsqRjGaemCqcLJHY8GmATYPNkSCUt9OS4lqKN+coEJz+zSIfjBoc5PX0eJRmNiDK5+QXDsEFPsPTgdmATUmMWYSSXLhSIcthvrCdN4/Ccak1LwmgUIjmBloSwIDAQAB";
+    public static final String PUBLIC_KEY_X509_BASE64 = "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAnpXzbjtotnewHkGvNDUfbkh44jlH6e4zpEEae/QNTjhYunXArtIrc/l6HWaKOpo8FAjq7vATY5HR/MMXZh1XG8sSGIf81A41X3X+DcE/qvAPyL/coPVeNpyMGb0xdkmuAnWupQZ80TvPrU4lPgcK8EmHvGpObwiZdRDf2GvfuKllExuh+6K6FC4r5LUkqL3ZxYu/d1NImqMqzL5LrHywj89VqgTQIN36W2sV5NYAGFJOme//SIf6UIEp5fhqjkaJwQ92FpUKYiRGsWbP97gYTueQAl4UaFxvvWGbW0OFjUYO3tz2EzYTMFl12nTn9V+UvIlzAfxYZcmvXpDq1wmLcQIDAQAB";
 
     public static final String DEFAULT_SERVER_URL = "http://127.0.0.1:8787";
 
