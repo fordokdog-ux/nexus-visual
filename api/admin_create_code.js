@@ -22,10 +22,15 @@ export default async function handler(req, res) {
     return;
   }
 
-  const expected = process.env.NV_ADMIN_TOKEN || '';
-  const got = getAuthToken(req);
+  const expected = (process.env.NV_ADMIN_TOKEN || '').trim();
+  const got = (getAuthToken(req) || '').trim();
 
-  if (!expected || got !== expected) {
+  if (!expected) {
+    res.status(500).json({ error: 'missing_admin_token_env' });
+    return;
+  }
+
+  if (got !== expected) {
     res.status(401).json({ error: 'unauthorized' });
     return;
   }
