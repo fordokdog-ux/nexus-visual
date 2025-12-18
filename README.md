@@ -20,6 +20,8 @@
 - Vercel → **Storage** → **Postgres** → Create.
 - После создания Vercel добавит env-переменные для подключения к Postgres в проект.
 
+Примечание: если у тебя в Storage отображается только **Prisma Postgres**, это ок — сервер использует `POSTGRES_PRISMA_URL`/`POSTGRES_URL_NON_POOLING` автоматически.
+
 #### 4) Сгенерировать RSA ключи (один раз)
 
 Локально на Windows:
