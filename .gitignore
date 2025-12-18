@@ -26,3 +26,10 @@ yarn-error.log*
 __pycache__/
 *.pyc
 
+.vercel/
+
+# Local one-off keygen output (contains private key)
+tools/vercel-lic/_keygen_output.txt
+
+.vercel
+.env*.local
