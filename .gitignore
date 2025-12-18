@@ -22,3 +22,7 @@ yarn-error.log*
 /tools/lic-server/keys/
 /tools/lic-server/licensing.db
 
+# Python caches
+__pycache__/
+*.pyc
+
