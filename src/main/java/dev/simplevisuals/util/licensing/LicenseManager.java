@@ -29,7 +29,8 @@ public final class LicenseManager {
      */
     public static final String PUBLIC_KEY_X509_BASE64 = "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsPukv2StX9DE0MYJ6eovsK4damnU87uiB2nMQv+S0hJ6LHfdFMLZ8dUB+BYCh4uvrtfO05HdFNIp52ANvtTs/s1C1Ak81PKnIJHXAufDic6qcO5DFHSg+Qt/jEUUmFF47QKiwhXgW2dbLuaWkdLqj6SgdsudB/VvTkf2DOgNBZNLOO3qjg3TQGTojhC18aPzbs4DuVE/EVoxBkYrytY9/qiPw6GGMDVHNmPyfPyoJ1+fgJWtlYeZGo1vnxKhU+du8WPmIIC/ZgEqtr9MgLnahAUPU/Jaumew38hxVFtfy+ZQmQKlzWJzhhBVMnP15EuLzHvqlMeU7SwCXD0+lZtJFQIDAQAB";
 
-    public static final String DEFAULT_SERVER_URL = "http://127.0.0.1:8787";
+    // Default production licensing server (overrideable via <runDirectory>/simplevisuals/license_server.txt)
+    public static final String DEFAULT_SERVER_URL = "https://nexus-visual-rose.vercel.app/api";
 
     private static volatile LicenseStatus cachedStatus = LicenseStatus.UNKNOWN;
     private static volatile String cachedReason = "";

@@ -174,6 +174,13 @@ public class LicenseActivateScreen extends Screen {
                     this.height - 16,
                     0x777777
             );
+
+            context.drawCenteredTextWithShadow(this.textRenderer,
+                    Text.literal("server: " + LicenseManager.getServerUrl()),
+                    w / 2,
+                    this.height - 28,
+                    0x777777
+            );
         }
     }
 }
