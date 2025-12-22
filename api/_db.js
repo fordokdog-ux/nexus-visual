@@ -40,17 +40,18 @@ export async function ensureSchema(client) {
       revoked_at BIGINT,
       revoke_reason TEXT,
       duration_days INTEGER,
+      duration_minutes INTEGER,
       note TEXT
     );
   `);
 
   // Добавляем новые колонки если их нет (для миграции)
-  const cols = ['expires_at', 'revoked', 'revoked_at', 'revoke_reason', 'duration_days', 'note'];
+  const cols = ['expires_at', 'revoked', 'revoked_at', 'revoke_reason', 'duration_days', 'duration_minutes', 'note'];
   for (const col of cols) {
     try {
       if (col === 'revoked') {
         await client.query(`ALTER TABLE codes ADD COLUMN IF NOT EXISTS ${col} BOOLEAN NOT NULL DEFAULT FALSE`);
-      } else if (col === 'duration_days') {
+      } else if (col === 'duration_days' || col === 'duration_minutes') {
         await client.query(`ALTER TABLE codes ADD COLUMN IF NOT EXISTS ${col} INTEGER`);
       } else if (col === 'expires_at' || col === 'revoked_at') {
         await client.query(`ALTER TABLE codes ADD COLUMN IF NOT EXISTS ${col} BIGINT`);

@@ -39,7 +39,7 @@ export default async function handler(req, res) {
     await ensureSchema(client);
 
     const rowRes = await client.query(
-      'SELECT code, used, bound_uuid, bound_hwid, expires_at, revoked, duration_days FROM codes WHERE code = $1 FOR UPDATE',
+      'SELECT code, used, bound_uuid, bound_hwid, expires_at, revoked, duration_days, duration_minutes FROM codes WHERE code = $1 FOR UPDATE',
       [code]
     );
 
@@ -71,9 +71,13 @@ export default async function handler(req, res) {
     let expiresAt = row.expires_at;
 
     if (!row.used) {
-      // Первая активация - вычисляем expires_at если есть duration_days
+      // Первая активация - вычисляем expires_at
       const now = nowSec();
-      if (row.duration_days && row.duration_days > 0) {
+      if (row.duration_minutes && row.duration_minutes > 0) {
+        // Минуты (для тестов)
+        expiresAt = now + (row.duration_minutes * 60);
+      } else if (row.duration_days && row.duration_days > 0) {
+        // Дни
         expiresAt = now + (row.duration_days * 24 * 60 * 60);
       }
 

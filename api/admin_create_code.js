@@ -48,25 +48,18 @@ export default async function handler(req, res) {
     const code = createCode();
     const createdAt = nowSec();
 
-    // Вычисляем время истечения
-    // Если указаны минуты - истекает сразу (для тестов)
-    // Если указаны дни - expires_at считается при активации
-    let expiresAt = null;
-    if (durationMinutes !== null && durationMinutes > 0) {
-      expiresAt = createdAt + (durationMinutes * 60);
-    }
+    // expires_at вычисляется при АКТИВАЦИИ на основе duration_days или duration_minutes
 
     await client.query(
-      `INSERT INTO codes(code, used, bound_uuid, bound_hwid, created_at, used_at, expires_at, revoked, revoked_at, revoke_reason, duration_days, note)
-       VALUES($1, FALSE, NULL, NULL, $2, NULL, $3, FALSE, NULL, NULL, $4, $5)`,
-      [code, createdAt, expiresAt, durationDays, note]
+      `INSERT INTO codes(code, used, bound_uuid, bound_hwid, created_at, used_at, expires_at, revoked, revoked_at, revoke_reason, duration_days, duration_minutes, note)
+       VALUES($1, FALSE, NULL, NULL, $2, NULL, NULL, FALSE, NULL, NULL, $3, $4, $5)`,
+      [code, createdAt, durationDays, durationMinutes, note]
     );
 
     res.status(200).json({
       code,
       duration_days: durationDays,
       duration_minutes: durationMinutes,
-      expires_at: expiresAt,
       note,
       created_at: createdAt
     });
