@@ -173,6 +173,32 @@ public final class LicenseManager {
                 return;
             }
 
+            // Онлайн проверка: revoked/expired на сервере
+            try {
+                com.google.gson.JsonObject statusResp = LicenseApi.checkStatus(getServerUrl(), sessionUuid, localHwid);
+                boolean valid = statusResp.has("valid") && statusResp.get("valid").getAsBoolean();
+                if (!valid) {
+                    String serverError = statusResp.has("error") ? statusResp.get("error").getAsString() : "server_rejected";
+                    if ("code_revoked".equals(serverError)) {
+                        cachedStatus = LicenseStatus.REVOKED;
+                        String reason = statusResp.has("reason") ? statusResp.get("reason").getAsString() : "";
+                        cachedReason = "revoked:" + reason;
+                        return;
+                    } else if ("code_expired".equals(serverError)) {
+                        cachedStatus = LicenseStatus.EXPIRED;
+                        cachedReason = "expired_on_server";
+                        return;
+                    } else {
+                        cachedStatus = LicenseStatus.INVALID;
+                        cachedReason = serverError;
+                        return;
+                    }
+                }
+            } catch (Throwable onlineErr) {
+                // Если нет сети - разрешаем работать с локальной лицензией (grace period)
+                // Можно сделать строже: cachedStatus = LicenseStatus.INVALID;
+            }
+
             cachedStatus = LicenseStatus.VALID;
             cachedReason = "ok";
         } catch (Throwable t) {
@@ -393,6 +419,7 @@ public final class LicenseManager {
         VALID,
         MISSING,
         EXPIRED,
+        REVOKED,
         INVALID
     }
 }

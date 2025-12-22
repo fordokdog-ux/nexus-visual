@@ -53,4 +53,36 @@ public final class LicenseApi {
 
         return obj;
     }
+
+    /**
+     * Проверяет статус лицензии на сервере (revoked/expired)
+     * @return JsonObject с полями: valid (boolean), error (string, optional), reason (string, optional)
+     */
+    public static JsonObject checkStatus(String serverUrl, String uuid, String hwid) throws Exception {
+        String url = (serverUrl == null || serverUrl.isBlank()) ? LicenseManager.DEFAULT_SERVER_URL : serverUrl.trim();
+        if (url.endsWith("/")) url = url.substring(0, url.length() - 1);
+
+        JsonObject req = new JsonObject();
+        req.addProperty("uuid", uuid == null ? "" : uuid.trim());
+        req.addProperty("hwid", hwid == null ? "" : hwid.trim());
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url + "/check_status"))
+                .timeout(Duration.ofSeconds(8))
+                .header("Content-Type", "application/json; charset=utf-8")
+                .POST(HttpRequest.BodyPublishers.ofString(req.toString(), StandardCharsets.UTF_8))
+                .build();
+
+        HttpResponse<String> resp = CLIENT.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        String body = resp.body() == null ? "" : resp.body();
+
+        JsonObject obj;
+        try {
+            obj = JsonParser.parseString(body).getAsJsonObject();
+        } catch (Throwable t) {
+            throw new IllegalStateException("bad_json_response:" + resp.statusCode());
+        }
+
+        return obj;
+    }
 }
