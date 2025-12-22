@@ -1,53 +1,27 @@
 <#
 .SYNOPSIS
   Nexus Visual License Admin Tool
-  Управление ключами активации
 
 .PARAMETER Action
-  Действие: create, list, revoke, unrevoke, delete, extend, reset_hwid
+  Action: create, list, revoke, unrevoke, delete, extend, reset_hwid
 
 .PARAMETER BaseUrl
-  URL сервера, например https://nexus-visual-rose.vercel.app/api
+  Server URL, e.g. https://nexus-visual-rose.vercel.app/api
 
 .PARAMETER AdminToken
-  Токен администратора (NV_ADMIN_TOKEN)
+  Admin token (NV_ADMIN_TOKEN)
 
 .PARAMETER Code
-  Код ключа для операций (revoke, unrevoke, delete, extend, reset_hwid)
+  Key code for operations
 
 .PARAMETER Days
-  Количество дней для create (duration) или extend
+  Number of days for create/extend
 
 .PARAMETER Note
-  Заметка при создании ключа
+  Note when creating key
 
 .PARAMETER Reason
-  Причина отзыва ключа
-
-.EXAMPLE
-  # Создать ключ на 7 дней
-  ./admin.ps1 -Action create -BaseUrl "https://..." -AdminToken "..." -Days 7
-
-  # Создать бессрочный ключ
-  ./admin.ps1 -Action create -BaseUrl "https://..." -AdminToken "..."
-
-  # Список всех ключей
-  ./admin.ps1 -Action list -BaseUrl "https://..." -AdminToken "..."
-
-  # Отозвать ключ
-  ./admin.ps1 -Action revoke -BaseUrl "https://..." -AdminToken "..." -Code "NV-XXXX-XXXX-XXXX" -Reason "Bad behavior"
-
-  # Вернуть отозванный ключ
-  ./admin.ps1 -Action unrevoke -BaseUrl "https://..." -AdminToken "..." -Code "NV-XXXX-XXXX-XXXX"
-
-  # Продлить ключ на 30 дней
-  ./admin.ps1 -Action extend -BaseUrl "https://..." -AdminToken "..." -Code "NV-XXXX-XXXX-XXXX" -Days 30
-
-  # Сбросить HWID (игрок сможет активировать на другом ПК)
-  ./admin.ps1 -Action reset_hwid -BaseUrl "https://..." -AdminToken "..." -Code "NV-XXXX-XXXX-XXXX"
-
-  # Удалить ключ полностью
-  ./admin.ps1 -Action delete -BaseUrl "https://..." -AdminToken "..." -Code "NV-XXXX-XXXX-XXXX"
+  Reason for revoke
 #>
 
 param(
@@ -109,15 +83,15 @@ switch ($Action) {
         $result = Invoke-Api "admin_create_code" $body
         if ($result) {
             Write-Host ""
-            Write-Host "=== НОВЫЙ КЛЮЧ СОЗДАН ===" -ForegroundColor Green
-            Write-Host "Код: $($result.code)" -ForegroundColor Cyan
+            Write-Host "=== KEY CREATED ===" -ForegroundColor Green
+            Write-Host "Code: $($result.code)" -ForegroundColor Cyan
             if ($result.duration_days) {
-                Write-Host "Срок действия: $($result.duration_days) дней (начнётся после активации)" -ForegroundColor Yellow
+                Write-Host "Duration: $($result.duration_days) days (starts after activation)" -ForegroundColor Yellow
             } else {
-                Write-Host "Срок действия: БЕССРОЧНО" -ForegroundColor Yellow
+                Write-Host "Duration: PERMANENT" -ForegroundColor Yellow
             }
             if ($result.note) {
-                Write-Host "Заметка: $($result.note)" -ForegroundColor Gray
+                Write-Host "Note: $($result.note)" -ForegroundColor Gray
             }
             Write-Host ""
         }
@@ -127,7 +101,7 @@ switch ($Action) {
         $result = Invoke-Api "admin_list" @{} "GET"
         if ($result) {
             Write-Host ""
-            Write-Host "=== СПИСОК КЛЮЧЕЙ ($($result.total) шт) ===" -ForegroundColor Green
+            Write-Host "=== KEY LIST ($($result.total) total) ===" -ForegroundColor Green
             Write-Host ""
             
             foreach ($c in $result.codes) {
@@ -147,13 +121,14 @@ switch ($Action) {
                 }
                 if ($c.expires_at) {
                     $expDate = [DateTimeOffset]::FromUnixTimeSeconds($c.expires_at).LocalDateTime
-                    Write-Host "  Истекает: $expDate" -ForegroundColor $(if ($c.expired) { "Red" } else { "Yellow" })
+                    $expColor = if ($c.expired) { "Red" } else { "Yellow" }
+                    Write-Host "  Expires: $expDate" -ForegroundColor $expColor
                 }
                 if ($c.revoke_reason) {
-                    Write-Host "  Причина отзыва: $($c.revoke_reason)" -ForegroundColor Red
+                    Write-Host "  Revoke reason: $($c.revoke_reason)" -ForegroundColor Red
                 }
                 if ($c.note) {
-                    Write-Host "  Заметка: $($c.note)" -ForegroundColor DarkGray
+                    Write-Host "  Note: $($c.note)" -ForegroundColor DarkGray
                 }
                 Write-Host ""
             }
@@ -162,7 +137,7 @@ switch ($Action) {
     
     "revoke" {
         if (-not $Code) {
-            Write-Host "Error: укажи -Code" -ForegroundColor Red
+            Write-Host "Error: specify -Code" -ForegroundColor Red
             return
         }
         
@@ -174,81 +149,81 @@ switch ($Action) {
         $result = Invoke-Api "admin_revoke" $body
         if ($result -and $result.success) {
             Write-Host ""
-            Write-Host "=== КЛЮЧ ОТОЗВАН ===" -ForegroundColor Red
-            Write-Host "Код: $Code" -ForegroundColor Cyan
+            Write-Host "=== KEY REVOKED ===" -ForegroundColor Red
+            Write-Host "Code: $Code" -ForegroundColor Cyan
             if ($Reason) {
-                Write-Host "Причина: $Reason" -ForegroundColor Yellow
+                Write-Host "Reason: $Reason" -ForegroundColor Yellow
             }
-            Write-Host "Игрок больше не сможет использовать этот ключ" -ForegroundColor Gray
+            Write-Host "Player can no longer use this key" -ForegroundColor Gray
             Write-Host ""
         }
     }
     
     "unrevoke" {
         if (-not $Code) {
-            Write-Host "Error: укажи -Code" -ForegroundColor Red
+            Write-Host "Error: specify -Code" -ForegroundColor Red
             return
         }
         
         $result = Invoke-Api "admin_unrevoke" @{ "code" = $Code }
         if ($result -and $result.success) {
             Write-Host ""
-            Write-Host "=== ОТЗЫВ СНЯТ ===" -ForegroundColor Green
-            Write-Host "Код: $Code" -ForegroundColor Cyan
-            Write-Host "Ключ снова активен" -ForegroundColor Gray
+            Write-Host "=== REVOKE REMOVED ===" -ForegroundColor Green
+            Write-Host "Code: $Code" -ForegroundColor Cyan
+            Write-Host "Key is active again" -ForegroundColor Gray
             Write-Host ""
         }
     }
     
     "delete" {
         if (-not $Code) {
-            Write-Host "Error: укажи -Code" -ForegroundColor Red
+            Write-Host "Error: specify -Code" -ForegroundColor Red
             return
         }
         
         $result = Invoke-Api "admin_delete" @{ "code" = $Code }
         if ($result -and $result.success) {
             Write-Host ""
-            Write-Host "=== КЛЮЧ УДАЛЁН ===" -ForegroundColor Red
-            Write-Host "Код: $Code" -ForegroundColor Cyan
-            Write-Host "Ключ полностью удалён из базы данных" -ForegroundColor Gray
+            Write-Host "=== KEY DELETED ===" -ForegroundColor Red
+            Write-Host "Code: $Code" -ForegroundColor Cyan
+            Write-Host "Key completely removed from database" -ForegroundColor Gray
             Write-Host ""
         }
     }
     
     "extend" {
         if (-not $Code) {
-            Write-Host "Error: укажи -Code" -ForegroundColor Red
+            Write-Host "Error: specify -Code" -ForegroundColor Red
             return
         }
         if ($Days -le 0) {
-            Write-Host "Error: укажи -Days (больше 0)" -ForegroundColor Red
+            Write-Host "Error: specify -Days (greater than 0)" -ForegroundColor Red
             return
         }
         
         $result = Invoke-Api "admin_extend" @{ "code" = $Code; "days" = $Days }
         if ($result -and $result.success) {
             Write-Host ""
-            Write-Host "=== КЛЮЧ ПРОДЛЁН ===" -ForegroundColor Green
-            Write-Host "Код: $Code" -ForegroundColor Cyan
-            Write-Host "Добавлено: $Days дней" -ForegroundColor Yellow
-            Write-Host "Новая дата истечения: $($result.expires_date)" -ForegroundColor Gray
+            Write-Host "=== KEY EXTENDED ===" -ForegroundColor Green
+            Write-Host "Code: $Code" -ForegroundColor Cyan
+            Write-Host "Added: $Days days" -ForegroundColor Yellow
+            Write-Host "New expiration: $($result.expires_date)" -ForegroundColor Gray
             Write-Host ""
         }
     }
     
     "reset_hwid" {
         if (-not $Code) {
-            Write-Host "Error: укажи -Code" -ForegroundColor Red
+            Write-Host "Error: specify -Code" -ForegroundColor Red
             return
         }
         
         $result = Invoke-Api "admin_reset_hwid" @{ "code" = $Code }
         if ($result -and $result.success) {
             Write-Host ""
-            Write-Host "=== HWID СБРОШЕН ===" -ForegroundColor Green
-            Write-Host "Код: $Code" -ForegroundColor Cyan
-            Write-Host "Игрок сможет активировать ключ на другом ПК" -ForegroundColor Gray
+            Write-Host "=== HWID RESET ===" -ForegroundColor Green
+            Write-Host "Code: $Code" -ForegroundColor Cyan
+            Write-Host "Player can activate on another PC" -ForegroundColor Gray
             Write-Host ""
         }
     }
