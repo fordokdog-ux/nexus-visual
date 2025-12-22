@@ -46,7 +46,7 @@ public abstract class EntityRenderDispatcherMixin {
 
         // Theme colors and fill/outline flags
         // Получаем актуальный цвет темы (включая градиентные темы)
-        Color theme = ThemeManager.getInstance().getCurrentTheme().getBackgroundColor();
+        Color theme = ThemeManager.getInstance().getBackgroundColor();
         boolean fill = module.fill.getValue();
 
         Color outlineColor = new Color(theme.getRed(), theme.getGreen(), theme.getBlue(), module.outlineAlpha.getValue().intValue());

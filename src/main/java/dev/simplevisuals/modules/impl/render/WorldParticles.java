@@ -109,7 +109,7 @@ public class WorldParticles extends Module implements ThemeManager.ThemeChangeLi
             );
         }
 
-        Color base = useThemeColor.getValue() ? themeManager.getCurrentTheme().getBackgroundColor() : this.color.getColor();
+        Color base = useThemeColor.getValue() ? themeManager.getBackgroundColor() : this.color.getColor();
         Color color = randomColor.getValue()
                 ? new Color(ThreadLocalRandom.current().nextInt(256),
                 ThreadLocalRandom.current().nextInt(256),
@@ -185,7 +185,7 @@ public class WorldParticles extends Module implements ThemeManager.ThemeChangeLi
         if (!useThemeColor.getValue()) return;
         if (randomColor.getValue()) return;
 
-        this.currentColor = theme.getBackgroundColor();
+        this.currentColor = themeManager.getBackgroundColor();
         for (Particle p : particles) p.color = this.currentColor;
     }
 

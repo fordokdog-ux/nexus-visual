@@ -85,14 +85,14 @@ public class Predictions extends Module implements ThemeManager.ThemeChangeListe
         super("Predictions", Category.Render, I18n.translate("module.predictions.description"));
         this.themeManager = ThemeManager.getInstance();
         this.currentColor = themeManager.getThemeColor();
-        this.currentColorSecondary = themeManager.getCurrentTheme().getSecondaryBackgroundColor();
+        this.currentColorSecondary = themeManager.getSecondaryBackgroundColor();
         themeManager.addThemeChangeListener(this);
     }
 
     private void updateActiveColors() {
         if (useThemeColor.getValue()) {
-            this.currentColor = themeManager.getCurrentTheme().getBackgroundColor();
-            this.currentColorSecondary = themeManager.getCurrentTheme().getSecondaryBackgroundColor();
+            this.currentColor = themeManager.getBackgroundColor();
+            this.currentColorSecondary = themeManager.getSecondaryBackgroundColor();
         } else {
             this.currentColor = color.getColor();
             this.currentColorSecondary = colorSecondary.getColor();

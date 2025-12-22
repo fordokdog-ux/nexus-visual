@@ -218,7 +218,7 @@ public class DamageParticles extends Module implements ThemeManager.ThemeChangeL
             // Перевод пиксельного размера в мировые единицы (~блоки)
             // Масштаб в мире с коэффициентом 0.3 по запросу
             float worldSize = dmgSize.getValue() * 0.04f * 0.3f * f;
-            Color base = useThemeColor.getValue() ? themeManager.getCurrentTheme().getBackgroundColor() : this.color.getColor();
+            Color base = useThemeColor.getValue() ? themeManager.getBackgroundColor() : this.color.getColor();
             Color color = new Color(base.getRed(), base.getGreen(), base.getBlue(), alpha);
             Vec3d toCam = cameraPos.subtract(p.pos);
             Vec3d renderPos = toCam.lengthSquared() > 0 ? p.pos.add(toCam.normalize().multiply(CAMERA_BIAS)) : p.pos;
@@ -310,7 +310,7 @@ public class DamageParticles extends Module implements ThemeManager.ThemeChangeL
 
     @Override
     public void onThemeChanged(ThemeManager.Theme theme) {
-        this.currentColor = theme.getBackgroundColor();
+        this.currentColor = themeManager.getBackgroundColor();
     }
 
     private static class PendingSpawn {

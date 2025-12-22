@@ -29,11 +29,16 @@ import net.minecraft.client.MinecraftClient;
 import java.awt.Color;
 import java.util.ArrayList;
 import java.util.List;
+import dev.simplevisuals.util.licensing.LicenseManager;
 
 @Getter
 public class ConfigManager implements Wrapper {
     
     private static final Logger LOGGER = LogManager.getLogger(ConfigManager.class);
+    private static final String CONFIG_EXT_NEW = ".nexus";
+    private static final String CONFIG_EXT_OLD = ".simple";
+    private static final String THEME_STORE_NEW = "themes.nexusthemes";
+    private static final String THEME_STORE_OLD = "themes.simplethemes";
     private final Gson gson;
     private final File configsDir;
     private final File themesDir;
@@ -49,9 +54,14 @@ public class ConfigManager implements Wrapper {
         if (!this.themesDir.exists()) {
             this.themesDir.mkdirs();
         }
-        this.themesStoreFile = new File(this.themesDir, "themes.simplethemes");
+        this.themesStoreFile = new File(this.themesDir, THEME_STORE_NEW);
         LOGGER.info("Путь к папке конфигураций: {}", this.configsDir.getAbsolutePath());
         LOGGER.info("Путь к папке тем: {}", this.themesDir.getAbsolutePath());
+
+        // Rename all legacy *.simple configs to *.nexus (including autocfg.simple)
+        try {
+            migrateConfigFilesIfNeeded();
+        } catch (Exception ignored) {}
         
         // Настройка Gson для красивого форматирования
         this.gson = new GsonBuilder()
@@ -66,11 +76,55 @@ public class ConfigManager implements Wrapper {
         } catch (Exception ignored) {}
     }
 
+    private void migrateConfigFilesIfNeeded() {
+        File[] legacy = configsDir.listFiles((dir, name) -> name != null && name.endsWith(CONFIG_EXT_OLD));
+        if (legacy == null || legacy.length == 0) return;
+
+        for (File src : legacy) {
+            if (src == null || !src.isFile()) continue;
+            String name = src.getName();
+            String base = name.substring(0, name.length() - CONFIG_EXT_OLD.length());
+            File dst = getConfigFileNew(base);
+            try {
+                if (!dst.exists()) {
+                    java.nio.file.Files.move(src.toPath(), dst.toPath());
+                } else {
+                    // If both exist, keep the newest as .nexus and remove .simple
+                    long srcTs = src.lastModified();
+                    long dstTs = dst.lastModified();
+                    if (srcTs > dstTs) {
+                        java.nio.file.Files.move(src.toPath(), dst.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                    } else {
+                        // .nexus is newer/equal
+                        src.delete();
+                    }
+                }
+            } catch (Throwable ignored) {}
+        }
+    }
+
+    private File getConfigFileNew(String configName) {
+        return new File(configsDir, configName + CONFIG_EXT_NEW);
+    }
+
+    private File getConfigFileOld(String configName) {
+        return new File(configsDir, configName + CONFIG_EXT_OLD);
+    }
+
+    private File getExistingConfigFile(String configName) {
+        File nf = getConfigFileNew(configName);
+        if (nf.exists()) return nf;
+        File of = getConfigFileOld(configName);
+        if (of.exists()) return of;
+        return nf;
+    }
+
     public String getThemesDirectory() {
         return themesDir.getAbsolutePath();
     }
 
     public synchronized void saveThemeStore() {
+        // Note: сохранение тем не должно зависеть от лицензии, иначе при смене VPN/HWID темы "сбрасываются"
         try {
             ThemeStoreData store = new ThemeStoreData();
             store.themes = new ArrayList<>();
@@ -112,12 +166,29 @@ public class ConfigManager implements Wrapper {
 
     private void migrateThemeStoreIfNeeded() {
         try {
-            File oldStore = new File(this.configsDir, "themes.simplethemes");
-            if (!oldStore.exists()) return;
             if (this.themesStoreFile.exists()) return;
 
-            Files.copy(oldStore.toPath(), this.themesStoreFile.toPath());
-            LOGGER.info("themes store перемещён в папку тем: {}", this.themesStoreFile.getAbsolutePath());
+            // Current preferred location/name
+            File newStore = new File(this.themesDir, THEME_STORE_NEW);
+            if (newStore.exists()) return;
+
+            // Old locations/names
+            File oldInThemes = new File(this.themesDir, THEME_STORE_OLD);
+            File oldInConfigs = new File(this.configsDir, THEME_STORE_OLD);
+
+            File source = null;
+            if (oldInThemes.exists()) source = oldInThemes;
+            else if (oldInConfigs.exists()) source = oldInConfigs;
+            if (source == null) return;
+
+            try {
+                java.nio.file.Files.move(source.toPath(), newStore.toPath());
+            } catch (Throwable moveFailed) {
+                Files.copy(source.toPath(), newStore.toPath());
+                try { source.delete(); } catch (Throwable ignored) {}
+            }
+
+            LOGGER.info("themes store мигрирован в {}", newStore.getAbsolutePath());
         } catch (Exception e) {
             LOGGER.warn("Не удалось мигрировать themes store: {}", e.getMessage());
         }
@@ -186,6 +257,9 @@ public class ConfigManager implements Wrapper {
     public CompletableFuture<Boolean> saveConfig(String configName) {
         return CompletableFuture.supplyAsync(() -> {
             try {
+                // Note: saving settings should not be license-gated; otherwise user changes (e.g. colors)
+                // will appear to "reset" after restart.
+
                 ConfigData configData = new ConfigData();
                 
                 // Persist command prefix
@@ -282,7 +356,7 @@ public class ConfigManager implements Wrapper {
                 configData.setHudSettings(hudSettings);
                 
                 // Сохраняем в файл
-                File configFile = new File(configsDir, configName + ".simple");
+                File configFile = getConfigFileNew(configName);
                 String json = gson.toJson(configData);
                 Files.write(configFile.toPath(), json.getBytes(StandardCharsets.UTF_8));
 
@@ -309,7 +383,7 @@ public class ConfigManager implements Wrapper {
         // 1) Чтение файла и парсинг в фоне
         return CompletableFuture.supplyAsync(() -> {
             try {
-                File configFile = new File(configsDir, configName + ".simple");
+                File configFile = getExistingConfigFile(configName);
                 if (!configFile.exists()) {
                     LOGGER.error("Конфигурация '{}' не найдена", configName);
                     return null;
@@ -492,14 +566,17 @@ public class ConfigManager implements Wrapper {
      * Получает список всех доступных конфигураций
      */
     public String[] getConfigList() {
-        File[] files = configsDir.listFiles((dir, name) -> name.endsWith(".simple"));
+        File[] files = configsDir.listFiles((dir, name) -> name.endsWith(CONFIG_EXT_NEW) || name.endsWith(CONFIG_EXT_OLD));
         if (files == null) return new String[0];
-        
-        String[] configs = new String[files.length];
-        for (int i = 0; i < files.length; i++) {
-            configs[i] = files[i].getName().replace(".simple", "");
+
+        java.util.LinkedHashSet<String> out = new java.util.LinkedHashSet<>();
+        for (File f : files) {
+            if (f == null) continue;
+            String n = f.getName();
+            if (n.endsWith(CONFIG_EXT_NEW)) out.add(n.substring(0, n.length() - CONFIG_EXT_NEW.length()));
+            else if (n.endsWith(CONFIG_EXT_OLD)) out.add(n.substring(0, n.length() - CONFIG_EXT_OLD.length()));
         }
-        return configs;
+        return out.toArray(new String[0]);
     }
     
     /**
@@ -513,23 +590,26 @@ public class ConfigManager implements Wrapper {
      * Удаляет конфигурацию
      */
     public boolean deleteConfig(String configName) {
-        File configFile = new File(configsDir, configName + ".simple");
-        if (configFile.exists()) {
-            boolean deleted = configFile.delete();
-            if (deleted) {
-                configCache.remove(configName);
-                LOGGER.info("Конфигурация '{}' удалена", configName);
-            }
-            return deleted;
+        boolean deletedAny = false;
+        File nf = getConfigFileNew(configName);
+        File of = getConfigFileOld(configName);
+
+        if (nf.exists()) deletedAny |= nf.delete();
+        if (of.exists()) deletedAny |= of.delete();
+
+        if (deletedAny) {
+            configCache.remove(configName);
+            LOGGER.info("Конфигурация '{}' удалена", configName);
         }
-        return false;
+
+        return deletedAny;
     }
     
     /**
      * Проверяет существование конфигурации
      */
     public boolean configExists(String configName) {
-        return new File(configsDir, configName + ".simple").exists();
+        return getConfigFileNew(configName).exists() || getConfigFileOld(configName).exists();
     }
     
     /**

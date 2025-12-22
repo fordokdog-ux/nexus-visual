@@ -18,12 +18,18 @@ public class FTHelper extends Module {
     // Бинды (можешь поменять на любые удобные)
     private final BindSetting disorientBind = new BindSetting("setting.disorientBind", new Bind(GLFW.GLFW_KEY_H, false));
     private final BindSetting trapBind = new BindSetting("setting.trapBind", new Bind(GLFW.GLFW_KEY_T, false));
+    private final BindSetting tridentBind = new BindSetting("setting.tridentBind", new Bind(GLFW.GLFW_KEY_G, false));
 
     private boolean disorientLatch = false;
     private boolean trapLatch = false;
+    private boolean tridentLatch = false;
 
     public FTHelper() {
         super("FTHelper", Category.Utility, I18n.translate("module.fthelper.description"));
+
+        getSettings().add(disorientBind);
+        getSettings().add(trapBind);
+        getSettings().add(tridentBind);
     }
 
     @EventHandler
@@ -47,6 +53,13 @@ public class FTHelper extends Module {
             switchToItem(mc, Items.NETHERITE_SCRAP); // или другой блок, который используешь для трапа
             trapLatch = true;
         } else if (!trapDown) trapLatch = false;
+
+        // Трезубец: по нажатию бинда берём трезубец из хотбара
+        boolean tridentDown = isBindDown(window, tridentBind.getValue());
+        if (tridentDown && !tridentLatch) {
+            switchToItem(mc, Items.TRIDENT);
+            tridentLatch = true;
+        } else if (!tridentDown) tridentLatch = false;
     }
 
     private static boolean isBindDown(long window, Bind bind) {

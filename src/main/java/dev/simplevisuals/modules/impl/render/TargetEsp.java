@@ -15,9 +15,17 @@ import dev.simplevisuals.client.util.animations.Animation;
 import dev.simplevisuals.client.util.animations.Easing;
 import dev.simplevisuals.client.util.renderer.Render2D;
 import dev.simplevisuals.client.util.world.WorldUtils;
+import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.resource.language.I18n;
+import net.minecraft.client.gl.ShaderProgramKeys;
+import net.minecraft.client.render.BufferBuilder;
+import net.minecraft.client.render.BufferRenderer;
+import net.minecraft.client.render.Tessellator;
+import net.minecraft.client.render.VertexFormat;
+import net.minecraft.client.render.VertexFormats;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.effect.StatusEffects;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.hit.EntityHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.RotationAxis;
@@ -25,6 +33,7 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.RaycastContext;
 import meteordevelopment.orbit.EventHandler;
 import java.awt.*;
+import org.joml.Matrix4f;
 // imports for renderer delegates only
 import dev.simplevisuals.client.render.renderers.JelloRenderer;
 import dev.simplevisuals.client.render.renderers.SoulRenderer;
@@ -73,12 +82,19 @@ public class TargetEsp extends Module {
     // Jello settings
     private final NumberSetting jelloHeight = new NumberSetting("setting.jelloHeight", 1.5f, 0.5f, 3.0f, 0.1f);
     private final NumberSetting jelloAnimationSpeed = new NumberSetting("setting.animationSpeed", 2500.0f, 1000.0f, 5000.0f, 100.0f);
+
+    // Circle(Jello) style
+    private final BooleanSetting jelloStyleSimple = new BooleanSetting("Простой", true, () -> false);
+    private final BooleanSetting jelloStyleCocoon = new BooleanSetting("Кокон", false, () -> false);
+    private final ListSetting jelloStyle = new ListSetting("Тип", () -> modeJello.getValue(), true, jelloStyleSimple, jelloStyleCocoon);
+
     private final BooleanSetting jelloGlow = new BooleanSetting("setting.markerGlow", true, () -> modeJello.getValue());
     private final NumberSetting jelloGlowIntensity = new NumberSetting("setting.glowIntensity", 0.5f, 0.1f, 1.5f, 0.1f);
     private final NumberSetting jelloAlpha = new NumberSetting("setting.alpha", 1.0f, 0.1f, 1.0f, 0.1f);
 
     // Цвет ESP (не зависит от темы)
     private final ColorSetting color = new ColorSetting("Цвет", new Color(255, 255, 255, 255).getRGB());
+    private final ColorSetting colorSecondary = new ColorSetting("Цвет 2", new Color(255, 255, 255, 255).getRGB());
 
     private final ThemeManager themeManager;
     private final SoulRenderer soulRenderer;
@@ -105,6 +121,7 @@ public class TargetEsp extends Module {
         ghostsGlowIntensity.setVisible(() -> modeGhosts.getValue() && ghostsGlow.getValue());
         markerHitFlash.setVisible(() -> modeMarker.getValue());
         ghostsAlpha.setVisible(() -> modeGhosts.getValue());
+        colorSecondary.setVisible(() -> modeGhosts.getValue() || modeJello.getValue() || modeMarker.getValue());
 
         // Jello visibility
         jelloHeight.setVisible(() -> modeJello.getValue());
@@ -171,6 +188,14 @@ public class TargetEsp extends Module {
         return color.getColor();
     }
 
+    private Color getMarkerColorSecondary() {
+        long now = System.currentTimeMillis();
+        if (markerHitFlash.getValue() && now - lastHitTime < HIT_FLASH_DURATION) {
+            return Color.RED;
+        }
+        return colorSecondary.getColor();
+    }
+
     private Vec3d entityCenter(LivingEntity ent, EventRender2D e) {
         Vec3d lp = ent.getLerpedPos(e.getTickDelta());
         return lp.add(0, ent.getHeight() * 0.5, 0);
@@ -220,6 +245,14 @@ public class TargetEsp extends Module {
     @EventHandler
     public void onRender2D(EventRender2D e) {
         if (fullNullCheck()) return;
+
+        // Safety: keep circle style single-select
+        if (jelloStyleSimple.getValue() && jelloStyleCocoon.getValue()) {
+            jelloStyleCocoon.setValue(false);
+        }
+        if (!jelloStyleSimple.getValue() && !jelloStyleCocoon.getValue()) {
+            jelloStyleSimple.setValue(true);
+        }
 
         long now = System.currentTimeMillis();
         // Track previous target if needed in future logic
@@ -377,7 +410,8 @@ public class TargetEsp extends Module {
                         lastKnownHeight,
                         lastKnownWidth,
                         ghostsAlpha.getValue().floatValue(),
-                        getMarkerColor()
+                        getMarkerColor(),
+                        getMarkerColorSecondary()
                 );
             }
         } else if (modeJello.getValue()) {
@@ -385,6 +419,7 @@ public class TargetEsp extends Module {
             if (lastTarget != null || (fadingTarget != null && jelloAnimation.getValue() > 0)) {
                 // Используем fadingTarget если есть, иначе lastTarget
                 LivingEntity targetToRender = fadingTarget != null ? fadingTarget : lastTarget;
+                boolean cocoon = jelloStyleCocoon.getValue();
                 jelloRenderer.render(
                         e,
                         targetToRender,
@@ -393,10 +428,12 @@ public class TargetEsp extends Module {
                         lastKnownHeight,
                         jelloHeight.getValue().doubleValue(),
                         jelloAnimationSpeed.getValue().doubleValue(),
+                        cocoon,
                         jelloGlow.getValue().booleanValue(),
                         jelloGlowIntensity.getValue().doubleValue(),
                         jelloAnimation.getValue(),
-                        getMarkerColor()
+                    getMarkerColor(),
+                    getMarkerColorSecondary()
                 );
             }
         }
@@ -479,7 +516,11 @@ public class TargetEsp extends Module {
         float finalSize = this.cachedFinalSize > 0 ? this.cachedFinalSize : (float) WorldUtils.getScale(centerWorld, BASE_SIZE * markerScale.getValue() * animVal);
         float rotationAngle = this.cachedRotation;
 
-        Color finalColor = new Color(colorRGBA, true);
+        int a = (colorRGBA >>> 24) & 0xFF;
+        Color cTopBase = getMarkerColor();
+        Color cBotBase = getMarkerColorSecondary();
+        Color cTop = new Color(cTopBase.getRed(), cTopBase.getGreen(), cTopBase.getBlue(), a);
+        Color cBottom = new Color(cBotBase.getRed(), cBotBase.getGreen(), cBotBase.getBlue(), a);
 
         e.getContext().getMatrices().push();
         e.getContext().getMatrices().multiply(RotationAxis.POSITIVE_Z.rotationDegrees(rotationAngle));
@@ -487,14 +528,36 @@ public class TargetEsp extends Module {
         // Старый/новый маркер — текстуры (как было раньше)
         boolean useOld = markerMode.getName("old") != null && markerMode.getName("old").getValue();
         String tex = useOld ? "hud/marker.png" : "hud/alt_marker.png";
-        Render2D.drawTexture(
-            e.getContext().getMatrices(),
-            -finalSize / 2f, -finalSize / 2f, finalSize, finalSize,
-            0f,
-            NexusVisual.id(tex),
-            finalColor
-        );
+        drawGradientMarkerTexture(e, NexusVisual.id(tex), -finalSize / 2f, -finalSize / 2f, finalSize, finalSize, cTop, cBottom);
 
         e.getContext().getMatrices().pop();
+    }
+
+    private static void drawGradientMarkerTexture(EventRender2D e, Identifier texture, float x, float y, float w, float h, Color top, Color bottom) {
+        RenderSystem.setShaderTexture(0, texture);
+        RenderSystem.setShader(ShaderProgramKeys.POSITION_TEX_COLOR);
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+        RenderSystem.disableDepthTest();
+        RenderSystem.depthMask(false);
+        RenderSystem.disableCull();
+        RenderSystem.setShaderColor(1f, 1f, 1f, 1f);
+
+        Matrix4f mat = e.getContext().getMatrices().peek().getPositionMatrix();
+        BufferBuilder bb = Tessellator.getInstance().begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_TEXTURE_COLOR);
+
+        int topRGBA = top.getRGB();
+        int botRGBA = bottom.getRGB();
+
+        bb.vertex(mat, x, y, 0f).texture(0f, 0f).color(topRGBA);
+        bb.vertex(mat, x + w, y, 0f).texture(1f, 0f).color(topRGBA);
+        bb.vertex(mat, x + w, y + h, 0f).texture(1f, 1f).color(botRGBA);
+        bb.vertex(mat, x, y + h, 0f).texture(0f, 1f).color(botRGBA);
+
+        BufferRenderer.drawWithGlobalProgram(bb.end());
+
+        RenderSystem.depthMask(true);
+        RenderSystem.enableDepthTest();
+        RenderSystem.enableCull();
     }
 }

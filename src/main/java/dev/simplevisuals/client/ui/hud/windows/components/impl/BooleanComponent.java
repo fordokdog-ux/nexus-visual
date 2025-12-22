@@ -25,17 +25,25 @@ public class BooleanComponent extends WindowComponent {
 		this.setting = setting;
 	}
 
+	private static boolean hoveredInclusive(float x, float y, float w, float h, float mx, float my, float pad) {
+		float x0 = x - pad;
+		float y0 = y - pad;
+		float x1 = x + w + pad;
+		float y1 = y + h + pad;
+		return mx >= x0 && mx <= x1 && my >= y0 && my <= y1;
+	}
+
 	@Override
 	public void render(DrawContext context, int mouseX, int mouseY, float delta) {
 		toggleAnimation.update(setting.getValue());
 		// Text stays readable; use theme text color and translate
-		Color textColor = ThemeManager.getInstance().getCurrentTheme().getTextColor();
+		Color textColor = ThemeManager.getInstance().getTextColor();
 		Render2D.drawFont(context.getMatrices(), Fonts.BOLD.getFont(8f), I18n.translate(getName()), x + 5f, y + 4f, new Color(textColor.getRed(), textColor.getGreen(), textColor.getBlue(), (int) (255 * animation.getValue())));
 
 		// Toggle background track
 		Render2D.drawRoundedRect(context.getMatrices(), x + width - 20f, y + 4.5f, 16f, 8f, 2.5f, new Color(23, 23, 23, 100));
 		// Toggle fill in theme accent color
-		Color accent = ThemeManager.getInstance().getCurrentTheme().getAccentColor();
+		Color accent = ThemeManager.getInstance().getAccentColor();
 		Render2D.drawRoundedRect(context.getMatrices(), x + width - 20f, y + 4.5f, 16f * toggleAnimation.getValue(), 8f, 2.5f, new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), (int) (255 * toggleAnimation.getLinear())));
 		// Knob stays white
 		Render2D.drawRoundedRect(context.getMatrices(), x + width - 19.5f + (8f * toggleAnimation.getValue()), y + 5f, 7f, 7f, 2.5f, Color.WHITE);
@@ -43,11 +51,25 @@ public class BooleanComponent extends WindowComponent {
 
 	@Override
 	public void mouseClicked(double mouseX, double mouseY, int button) {
-        if (MathUtils.isHovered(x + width - 20f, y + 3.5f, 16f, 8f, (float) mouseX, (float) mouseY) && button == 0) setting.setValue(!setting.getValue());
-        // Ensure immediate persistence for HUD visibility toggles
-        try {
+		if (button != 0 && button != 1) return;
+
+		float mx = (float) mouseX;
+		float my = (float) mouseY;
+
+		float switchX = x + width - 20f;
+		float switchY = y + 4.5f;
+		float switchW = 16f;
+		float switchH = 8f;
+
+		boolean inRow = hoveredInclusive(x, y, width, height, mx, my, 1.5f);
+		boolean inSwitch = hoveredInclusive(switchX, switchY, switchW, switchH, mx, my, 2.0f);
+		if (!(inRow || inSwitch)) return;
+
+		setting.setValue(!setting.getValue());
+		// Ensure immediate persistence
+		try {
 			NexusVisual.getInstance().getAutoSaveManager().forceSave();
-        } catch (Throwable ignored) {}
+		} catch (Throwable ignored) {}
 	}
 
 	@Override

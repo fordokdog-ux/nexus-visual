@@ -71,7 +71,8 @@ public class SkeletonEsp extends Module {
         
         RenderSystem.enableBlend();
         RenderSystem.blendFuncSeparate(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA, GL11.GL_ONE, GL11.GL_ZERO);
-        RenderSystem.lineWidth(lineWidth.getValue().floatValue());
+        float baseWidth = lineWidth.getValue().floatValue();
+        RenderSystem.lineWidth(1.0f);
         // Рисуем поверх игроков, но скрываем блоками (через raycast)
         RenderSystem.disableDepthTest();
         RenderSystem.depthMask(false);
@@ -83,6 +84,12 @@ public class SkeletonEsp extends Module {
             if (!player.isAlive()) continue;
 
             if (!shouldRenderThroughPlayers(cameraPos, player, tickDelta)) continue;
+
+            float dist = (float) cameraPos.distanceTo(player.getPos());
+            // Reduce width with distance so far targets don't look "fat".
+            float falloff = 3.0f / (dist + 3.0f);
+            float effectiveWidth = MathHelper.clamp(baseWidth * falloff, 0.10f, baseWidth);
+            RenderSystem.lineWidth(effectiveWidth);
             
             int lineColor = FriendsManager.checkFriend(player.getName().getString()) 
                     ? friendColor.getValue() | 0xFF000000

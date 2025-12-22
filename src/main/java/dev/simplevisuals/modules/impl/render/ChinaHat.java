@@ -64,15 +64,15 @@ public class ChinaHat extends Module implements ThemeManager.ThemeChangeListener
     @Override
     public void onThemeChanged(ThemeManager.Theme theme) {
         if (!useThemeColor.getValue()) return;
-        this.currentColor = theme.getBackgroundColor();
-        this.secondaryColor = theme.getSecondaryBackgroundColor();
+        this.currentColor = themeManager.getBackgroundColor();
+        this.secondaryColor = themeManager.getSecondaryBackgroundColor();
     }
 
     @EventHandler
     public void onThemeChanged(dev.simplevisuals.client.events.impl.EventThemeChanged event) {
         if (!useThemeColor.getValue()) return;
-        this.currentColor = event.getTheme().getBackgroundColor();
-        this.secondaryColor = event.getTheme().getSecondaryBackgroundColor();
+        this.currentColor = themeManager.getBackgroundColor();
+        this.secondaryColor = themeManager.getSecondaryBackgroundColor();
     }
 
     @Override

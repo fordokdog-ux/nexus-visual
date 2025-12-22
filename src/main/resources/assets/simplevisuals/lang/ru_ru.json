@@ -37,6 +37,7 @@
   "simplevisuals.mainmenu.copyright": "Copyright Mojang AB. Не распространять!",
 
   "displayAbsorption": "Абсорбция",
+  "targethud.follow": "Преследование",
   "hudParticles": "HUD-частицы",
 
   "notify.featureEnabled": "Функция %s включена",
@@ -107,7 +108,9 @@
   "setting.time": "Время",
   "setting.disorientBind": "Дизориентация",
   "setting.trapBind": "Трапка",
+  "setting.tridentBind": "Трезубец",
   "setting.pearlBind": "Пёрл",
+    "setting.elytraBind": "Бинд на элитру",
   "setting.friendKey": "Клавиша друга",
   "setting.noFriendDamage": "Не бить друзей",
   "setting.smoothTab": "Плавный Tab",
@@ -166,6 +169,7 @@
   "module.pvphelper.description": "Помогает в PvP",
   "module.hitsound.description": "Воспроизводит звуки при ударе",
   "module.fthelper.description": "Помогает на серверах FunTime",
+  "module.cape.description": "Показывает плащ (на себе/на всех)",
   "module.zoom.description": "Приближает камеру",
   "module.worldparticles.description": "Показывает частицы в мире",
   "module.viewmodel.description": "Меняет положение рук",

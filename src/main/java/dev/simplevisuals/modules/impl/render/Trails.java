@@ -53,7 +53,7 @@ public class Trails extends Module implements ThemeManager.ThemeChangeListener {
         try (var __ = Perf.scopeCpu("Trails.onRender3D")) {
             Render3D.prepare();
             float tickDelta = Render3D.getTickDelta();
-            Color base = useThemeColor.getValue() ? ThemeManager.getInstance().getCurrentTheme().getBackgroundColor() : color.getColor();
+            Color base = useThemeColor.getValue() ? ThemeManager.getInstance().getBackgroundColor() : color.getColor();
             int baseR = base.getRed();
             int baseG = base.getGreen();
             int baseB = base.getBlue();

@@ -31,7 +31,7 @@ public abstract class WorldRendererMixin {
         WorldUtils.lastModelView.set(RenderSystem.getModelViewMatrix());
     }
 
-    @Inject(method = "renderEntities(Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumerProvider$Immediate;Lnet/minecraft/client/render/Camera;Lnet/minecraft/client/render/RenderTickCounter;Ljava/util/List;)V", at = @At("HEAD"))
+    @Inject(method = "renderEntities", at = @At("HEAD"), require = 0)
     private void beforeRenderEntities(MatrixStack matrices, VertexConsumerProvider.Immediate vertexConsumers, Camera camera, RenderTickCounter tickCounter, List<?> entities, CallbackInfo ci) {
         EventRender3D.PreEntities event = new EventRender3D.PreEntities(tickCounter, matrices);
         NexusVisual.getInstance().getEventHandler().post(event);

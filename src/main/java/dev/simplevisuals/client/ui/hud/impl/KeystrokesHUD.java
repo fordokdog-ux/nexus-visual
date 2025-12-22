@@ -41,8 +41,8 @@ public class KeystrokesHUD extends HudElement {
         var matrices = e.getContext().getMatrices();
         ThemeManager.Theme theme = themeManager.getCurrentTheme();
 
-        Color text = theme.getTextColor();
-        Color accent = theme.getAccentColor();
+        Color text = themeManager.getTextColor();
+        Color accent = themeManager.getAccentColor();
 
         float x = getX();
         float y = getY();

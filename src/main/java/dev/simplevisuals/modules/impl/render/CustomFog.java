@@ -33,11 +33,11 @@ public class CustomFog extends Module {
     }
 
     public Color getSkyColor() {
-        return useThemeColor.getValue() ? themeManager.getCurrentTheme().getBackgroundColor() : fogColor.getColor();
+        return useThemeColor.getValue() ? themeManager.getBackgroundColor() : fogColor.getColor();
     }
 
     public Color getSkyColorSecondary() {
-        return useThemeColor.getValue() ? themeManager.getCurrentTheme().getSecondaryBackgroundColor() : fogColor.getColor();
+        return useThemeColor.getValue() ? themeManager.getSecondaryBackgroundColor() : fogColor.getColor();
     }
 
     public float getFogDistance() {

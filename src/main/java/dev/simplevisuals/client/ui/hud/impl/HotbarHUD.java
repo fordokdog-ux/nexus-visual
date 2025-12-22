@@ -8,11 +8,6 @@ import dev.simplevisuals.client.util.renderer.Render2D;
 import dev.simplevisuals.client.util.renderer.fonts.Fonts;
 import dev.simplevisuals.client.util.animations.Easing;
 import dev.simplevisuals.client.util.animations.infinity.InfinityAnimation;
-import dev.simplevisuals.modules.impl.render.UI;
-import dev.simplevisuals.NexusVisual;
-import dev.simplevisuals.client.events.impl.EventMouse;
-import dev.simplevisuals.modules.settings.impl.BooleanSetting;
-import dev.simplevisuals.client.util.math.MathUtils;
 
 import java.awt.*;
 
@@ -40,25 +35,13 @@ public class HotbarHUD extends HudElement {
     private final InfinityAnimation hpAnimPx = new InfinityAnimation(Easing.BOTH_SINE);
     private final InfinityAnimation foodAnimPx = new InfinityAnimation(Easing.BOTH_SINE);
     private final InfinityAnimation xpAnimPx = new InfinityAnimation(Easing.OUT_QUAD);
+    private final InfinityAnimation airAnimPx = new InfinityAnimation(Easing.OUT_QUAD);
     private final InfinityAnimation selAnimX = new InfinityAnimation(Easing.OUT_QUAD);
     private float lastSelX = -1f;
-
-    private final BooleanSetting showHp = new BooleanSetting("HP", true);
-    private final BooleanSetting showHunger = new BooleanSetting("Hunger", true);
-    private final BooleanSetting showXp = new BooleanSetting("XP", true);
-
-    // Last rendered bar bounds for RMB toggles
-    private float lastHpX, lastHpY, lastHpW, lastHpH;
-    private float lastFoodX, lastFoodY, lastFoodW, lastFoodH;
-    private float lastXpX, lastXpY, lastXpW, lastXpH;
 
     public HotbarHUD() {
         super("Hotbar");
         this.themeManager = ThemeManager.getInstance();
-
-        getSettings().add(showHp);
-        getSettings().add(showHunger);
-        getSettings().add(showXp);
     }
 
     @Override
@@ -72,11 +55,9 @@ public class HotbarHUD extends HudElement {
         float baseY = getY();
 
         ThemeManager.Theme theme = themeManager.getCurrentTheme();
-        Color background = theme.getBackgroundColor();
-        Color text = theme.getTextColor();
-        Color pillBg = theme.getSecondaryBackgroundColor();
+        Color text = themeManager.getTextColor();
         // Selected color from current theme accent color
-        Color selected = theme.getAccentColor();
+        Color selected = themeManager.getAccentColor();
 
         // Update bounds lazily (safe after window is ready)
         setBounds(baseX, baseY, barWidth, barHeight);
@@ -105,88 +86,80 @@ public class HotbarHUD extends HudElement {
             // Same Y for HP and Hunger
             float barsY = baseY - (barH + 6f + xpBarHeight); // a bit above hotbar, with space for XP below
 
-            // Cache hitboxes (even if drawing is disabled)
-            lastHpX = x;
-            lastHpY = barsY;
-            lastHpW = halfW;
-            lastHpH = barH;
+            // Air (bubbles) indicator: vanilla status bars are cancelled when Hotbar HUD is enabled,
+            // so we draw a compact air bar when needed.
+            int air = mc.player.getAir();
+            int maxAir = mc.player.getMaxAir();
+            if (maxAir > 0 && air < maxAir) {
+                float airH = 8f;
+                float airY = barsY - airH - 4f;
+
+                HudStyle.drawInset(matrices, x, airY, w, airH, 5f, theme, 130);
+                float airPct = Math.min(1f, Math.max(0f, air / (float) maxAir));
+                float airTargetPx = w * airPct;
+                float airFill = Math.max(0f, Math.min(w, airAnimPx.animate(airTargetPx, 110)));
+                Color airFillCol = HudStyle.alphaCap(selected, 210);
+                Render2D.drawRoundedRect(matrices, x, airY, airFill, airH, 2f, airFillCol);
+            }
 
             // Health progress (left half)
-            if (showHp.getValue()) {
-                float health = mc.player.getHealth();
-                float maxHealth = mc.player.getMaxHealth();
-                float absorption = mc.player.getAbsorptionAmount();
-                float hpPct = Math.min(1f, Math.max(0f, (health + absorption) / Math.max(1f, maxHealth)));
-                HudStyle.drawInset(matrices, x, barsY, halfW, barH, 5f, theme, 130);
-                float hpTargetPx = halfW * hpPct;
-                float hpFill = Math.max(0f, Math.min(halfW, hpAnimPx.animate(hpTargetPx, 110)));
-                Render2D.drawRoundedRect(matrices, x, barsY, hpFill, barH, 2f, HP_FG);
-                // HP text centered inside left bar (current/max)
-                int hpCur = (int) Math.floor(health);
-                int hpMax = (int) Math.floor(maxHealth);
-                String hpTxt = hpCur + "/" + hpMax;
-                float hpTxtSize = 8.5f;
-                var fontHp = Fonts.REGULAR.getFont(hpTxtSize);
-                float hpTxtW = Fonts.REGULAR.getWidth(hpTxt, hpTxtSize);
-                float hpTxtH = Fonts.REGULAR.getHeight(hpTxtSize);
-                float hpTxtX = x + (halfW - hpTxtW) / 2f;
-                float hpTxtY = barsY + (barH - hpTxtH) / 2f + 0.3f;
-                Render2D.drawFont(matrices, fontHp, hpTxt, hpTxtX, hpTxtY, text);
-            }
+            float health = mc.player.getHealth();
+            float maxHealth = mc.player.getMaxHealth();
+            float absorption = mc.player.getAbsorptionAmount();
+            float hpPct = Math.min(1f, Math.max(0f, (health + absorption) / Math.max(1f, maxHealth)));
+            HudStyle.drawInset(matrices, x, barsY, halfW, barH, 5f, theme, 130);
+            float hpTargetPx = halfW * hpPct;
+            float hpFill = Math.max(0f, Math.min(halfW, hpAnimPx.animate(hpTargetPx, 110)));
+            Render2D.drawRoundedRect(matrices, x, barsY, hpFill, barH, 2f, HP_FG);
+            // HP text centered inside left bar (current/max)
+            int hpCur = (int) Math.floor(health);
+            int hpMax = (int) Math.floor(maxHealth);
+            String hpTxt = hpCur + "/" + hpMax;
+            float hpTxtSize = 8.5f;
+            var fontHp = Fonts.REGULAR.getFont(hpTxtSize);
+            float hpTxtW = Fonts.REGULAR.getWidth(hpTxt, hpTxtSize);
+            float hpTxtH = Fonts.REGULAR.getHeight(hpTxtSize);
+            float hpTxtX = x + (halfW - hpTxtW) / 2f;
+            float hpTxtY = barsY + (barH - hpTxtH) / 2f + 0.3f;
+            Render2D.drawFont(matrices, fontHp, hpTxt, hpTxtX, hpTxtY, text);
 
             // Hunger progress (right half)
             float rightX = x + halfW + splitGap;
-
-            lastFoodX = rightX;
-            lastFoodY = barsY;
-            lastFoodW = halfW;
-            lastFoodH = barH;
-
-            if (showHunger.getValue()) {
-                float hunger = mc.player.getHungerManager().getFoodLevel(); // 0..20
-                float foodPct = Math.min(1f, Math.max(0f, hunger / 20f));
-                HudStyle.drawInset(matrices, rightX, barsY, halfW, barH, 5f, theme, 130);
-                float foodTargetPx = halfW * foodPct;
-                float foodFill = Math.max(0f, Math.min(halfW, foodAnimPx.animate(foodTargetPx, 110)));
-                Render2D.drawRoundedRect(matrices, rightX, barsY, foodFill, barH, 2f, FOOD_FG);
-                // Hunger text centered inside right bar (current/max)
-                int foodCur = (int) hunger;
-                int foodMax = 20;
-                String foodTxt = foodCur + "/" + foodMax;
-                float foodTxtSize = 8.5f;
-                var fontFood = Fonts.REGULAR.getFont(foodTxtSize);
-                float foodTxtW = Fonts.REGULAR.getWidth(foodTxt, foodTxtSize);
-                float foodTxtH = Fonts.REGULAR.getHeight(foodTxtSize);
-                float foodTxtX = rightX + (halfW - foodTxtW) / 2f;
-                float foodTxtY = barsY + (barH - foodTxtH) / 2f + 0.3f;
-                Render2D.drawFont(matrices, fontFood, foodTxt, foodTxtX, foodTxtY, text);
-            }
+            float hunger = mc.player.getHungerManager().getFoodLevel(); // 0..20
+            float foodPct = Math.min(1f, Math.max(0f, hunger / 20f));
+            HudStyle.drawInset(matrices, rightX, barsY, halfW, barH, 5f, theme, 130);
+            float foodTargetPx = halfW * foodPct;
+            float foodFill = Math.max(0f, Math.min(halfW, foodAnimPx.animate(foodTargetPx, 110)));
+            Render2D.drawRoundedRect(matrices, rightX, barsY, foodFill, barH, 2f, FOOD_FG);
+            // Hunger text centered inside right bar (current/max)
+            int foodCur = (int) hunger;
+            int foodMax = 20;
+            String foodTxt = foodCur + "/" + foodMax;
+            float foodTxtSize = 8.5f;
+            var fontFood = Fonts.REGULAR.getFont(foodTxtSize);
+            float foodTxtW = Fonts.REGULAR.getWidth(foodTxt, foodTxtSize);
+            float foodTxtH = Fonts.REGULAR.getHeight(foodTxtSize);
+            float foodTxtX = rightX + (halfW - foodTxtW) / 2f;
+            float foodTxtY = barsY + (barH - foodTxtH) / 2f + 0.3f;
+            Render2D.drawFont(matrices, fontFood, foodTxt, foodTxtX, foodTxtY, text);
 
             // XP progress + level text (below split bars)
             float xpY = barsY + barH + 4f;
-
-            lastXpX = x;
-            lastXpY = xpY;
-            lastXpW = w;
-            lastXpH = xpBarHeight;
-
-            if (showXp.getValue()) {
-                float xp = mc.player.experienceProgress; // 0..1
-                int level = mc.player.experienceLevel;
-                HudStyle.drawInset(matrices, x, xpY, w, xpBarHeight, 5f, theme, 130);
-                float xpTargetPx = w * Math.min(1f, Math.max(0f, xp));
-                float xpFill = Math.max(0f, Math.min(w, xpAnimPx.animate(xpTargetPx, 110)));
-                Render2D.drawRoundedRect(matrices, x, xpY, xpFill, xpBarHeight, 2f, XP_FG);
-                // Level number centered INSIDE XP bar
-                String lvl = String.valueOf(level);
-                float lvlSize = 8.5f;
-                var fontLvl = Fonts.REGULAR.getFont(lvlSize);
-                float lvlW = Fonts.REGULAR.getWidth(lvl, lvlSize);
-                float lvlH = Fonts.REGULAR.getHeight(lvlSize);
-                float lvlX = x + (w - lvlW) / 2f;
-                float lvlY = xpY + (xpBarHeight - lvlH) / 2f + 0.3f;
-                Render2D.drawFont(matrices, fontLvl, lvl, lvlX, lvlY, text);
-            }
+            float xp = mc.player.experienceProgress; // 0..1
+            int level = mc.player.experienceLevel;
+            HudStyle.drawInset(matrices, x, xpY, w, xpBarHeight, 5f, theme, 130);
+            float xpTargetPx = w * Math.min(1f, Math.max(0f, xp));
+            float xpFill = Math.max(0f, Math.min(w, xpAnimPx.animate(xpTargetPx, 110)));
+            Render2D.drawRoundedRect(matrices, x, xpY, xpFill, xpBarHeight, 2f, XP_FG);
+            // Level number centered INSIDE XP bar
+            String lvl = String.valueOf(level);
+            float lvlSize = 8.5f;
+            var fontLvl = Fonts.REGULAR.getFont(lvlSize);
+            float lvlW = Fonts.REGULAR.getWidth(lvl, lvlSize);
+            float lvlH = Fonts.REGULAR.getHeight(lvlSize);
+            float lvlX = x + (w - lvlW) / 2f;
+            float lvlY = xpY + (xpBarHeight - lvlH) / 2f + 0.3f;
+            Render2D.drawFont(matrices, fontLvl, lvl, lvlX, lvlY, text);
         }
 
         // Selected slot highlight (uses player's current slot)
@@ -272,47 +245,6 @@ public class HotbarHUD extends HudElement {
         }
 
         super.onRender2D(e);
-    }
-
-    @Override
-    public void onMouse(EventMouse e) {
-        // Keep original HUD editing behavior
-        super.onMouse(e);
-
-        if (fullNullCheck()) return;
-        if (e.getAction() != 1) return; // press
-        if (e.getButton() != 1) return; // RMB
-
-        // Allow toggling both in-game and while editing HUD in chat.
-        // We cannot cancel vanilla RMB action, so keep it simple.
-        int mx = mouseX();
-        int my = mouseY();
-
-        if (showHp.getValue() && MathUtils.isHovered(lastHpX, lastHpY, lastHpW, lastHpH, mx, my)) {
-            showHp.setValue(false);
-            return;
-        }
-        if (!showHp.getValue() && MathUtils.isHovered(lastHpX, lastHpY, lastHpW, lastHpH, mx, my)) {
-            showHp.setValue(true);
-            return;
-        }
-
-        if (showHunger.getValue() && MathUtils.isHovered(lastFoodX, lastFoodY, lastFoodW, lastFoodH, mx, my)) {
-            showHunger.setValue(false);
-            return;
-        }
-        if (!showHunger.getValue() && MathUtils.isHovered(lastFoodX, lastFoodY, lastFoodW, lastFoodH, mx, my)) {
-            showHunger.setValue(true);
-            return;
-        }
-
-        if (showXp.getValue() && MathUtils.isHovered(lastXpX, lastXpY, lastXpW, lastXpH, mx, my)) {
-            showXp.setValue(false);
-            return;
-        }
-        if (!showXp.getValue() && MathUtils.isHovered(lastXpX, lastXpY, lastXpW, lastXpH, mx, my)) {
-            showXp.setValue(true);
-        }
     }
 }
 

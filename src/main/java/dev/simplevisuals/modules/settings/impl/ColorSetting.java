@@ -31,6 +31,29 @@ public class ColorSetting extends Setting<Integer> {
         return this; // Поддержка цепочки вызовов
     }
 
+    @Override
+    public void setValue(Integer value) {
+        Integer before = null;
+        try {
+            before = super.getValue();
+        } catch (Throwable ignored) {}
+
+        super.setValue(value);
+
+        Integer after = null;
+        try {
+            after = super.getValue();
+        } catch (Throwable ignored) {}
+
+        this.cachedValue = after;
+        if (onAction != null) {
+            // Запускаем действие только если изменение реально применилось
+            if (before == null || after == null || !before.equals(after)) {
+                onAction.run();
+            }
+        }
+    }
+
     // Исправление: использование сеттера setVisible вместо прямого доступа к полю visible
     @Override
     public void setVisible(Supplier<Boolean> visible) {
@@ -58,6 +81,15 @@ public class ColorSetting extends Setting<Integer> {
             cachedValue = super.getValue();
         }
         return cachedValue;
+    }
+
+    @Override
+    public void reset() {
+        super.reset();
+        cachedValue = super.getValue();
+        if (onAction != null) {
+            onAction.run();
+        }
     }
 
     /**

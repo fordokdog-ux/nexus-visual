@@ -28,8 +28,8 @@ public final class HudStyle {
     }
 
     public static void drawCard(MatrixStack matrices, float x, float y, float w, float h, float radius, ThemeManager.Theme theme, int bgAlpha, int borderAlpha) {
-        Color bg = alphaCap(theme.getBackgroundColor(), bgAlpha);
-        Color border = alphaCap(theme.getBorderColor(), borderAlpha);
+        Color bg = alphaCap(ThemeManager.getInstance().getBackgroundColor(), bgAlpha);
+        Color border = alphaCap(ThemeManager.getInstance().getBorderColor(), borderAlpha);
         if (bgAlpha > 0) {
             Render2D.drawRoundedRect(matrices, x, y, w, h, radius, bg);
         }
@@ -37,8 +37,8 @@ public final class HudStyle {
     }
 
     public static void drawInset(MatrixStack matrices, float x, float y, float w, float h, float radius, ThemeManager.Theme theme, int alpha) {
-        Color fill = alphaCap(theme.getSecondaryBackgroundColor(), alpha);
-        Color border = alphaCap(theme.getBorderColor(), Math.min(160, alpha));
+        Color fill = alphaCap(ThemeManager.getInstance().getSecondaryBackgroundColor(), alpha);
+        Color border = alphaCap(ThemeManager.getInstance().getBorderColor(), Math.min(160, alpha));
         Render2D.drawRoundedRect(matrices, x, y, w, h, radius, fill);
         Render2D.drawBorder(matrices, x, y, w, h, radius, 0.6f, 0.6f, border);
     }

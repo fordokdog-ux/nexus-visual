@@ -98,7 +98,7 @@ public class BlockOverlay extends Module {
 
 
     private Color getOverlayColor() {
-        Color themeColor = useThemeColor.getValue() ? themeManager.getCurrentTheme().getBackgroundColor() : color.getColor();
+        Color themeColor = useThemeColor.getValue() ? themeManager.getBackgroundColor() : color.getColor();
         return new Color(
                 themeColor.getRed(),
                 themeColor.getGreen(),
@@ -108,7 +108,7 @@ public class BlockOverlay extends Module {
     }
 
     private Color getOverlayColorSecondary() {
-        Color themeColorSecondary = useThemeColor.getValue() ? themeManager.getCurrentTheme().getSecondaryBackgroundColor() : colorSecondary.getColor();
+        Color themeColorSecondary = useThemeColor.getValue() ? themeManager.getSecondaryBackgroundColor() : colorSecondary.getColor();
         return new Color(
                 themeColorSecondary.getRed(),
                 themeColorSecondary.getGreen(),

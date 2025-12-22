@@ -33,8 +33,8 @@ public class PerfHUD extends HudElement {
         var matrices = e.getContext().getMatrices();
 
         ThemeManager.Theme theme = ThemeManager.getInstance().getCurrentTheme();
-        Color bg = theme.getBackgroundColor();
-        Color text = theme.getTextColor();
+        Color bg = ThemeManager.getInstance().getBackgroundColor();
+        Color text = ThemeManager.getInstance().getTextColor();
         Color dim = withAlpha(text, 180);
 
         Perf.endFrame();

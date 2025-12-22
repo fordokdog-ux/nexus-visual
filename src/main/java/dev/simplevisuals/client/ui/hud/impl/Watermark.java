@@ -33,9 +33,9 @@ public class Watermark extends HudElement implements ThemeManager.ThemeChangeLis
     }
 
     private void applyTheme(ThemeManager.Theme theme) {
-        this.bgColor = theme.getBackgroundColor();
-        this.textColor = theme.getTextColor();
-        this.accentColor = theme.getAccentColor();
+        this.bgColor = themeManager.getBackgroundColor();
+        this.textColor = themeManager.getTextColor();
+        this.accentColor = themeManager.getAccentColor();
     }
 
     @Override
@@ -54,8 +54,8 @@ public class Watermark extends HudElement implements ThemeManager.ThemeChangeLis
         Font fontRegular = Fonts.REGULAR;
 
         ThemeManager.Theme theme = themeManager.getCurrentTheme();
-        Color text = theme.getTextColor();
-        Color accent = theme.getAccentColor();
+        Color text = themeManager.getTextColor();
+        Color accent = themeManager.getAccentColor();
 
         String title = "Nexus Visual";
         String link = "t.me/NexusVisual";
@@ -88,6 +88,11 @@ public class Watermark extends HudElement implements ThemeManager.ThemeChangeLis
 
         // Logo
         float logoPad = 0.0f;
+        // Не даём "прозрачности темы" влиять на логотип: фиксируем alpha=255,
+        // но сохраняем RGB из текущего акцентного цвета.
+        Color logoColor = accent == null
+                ? new Color(255, 255, 255, 255)
+                : new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), 255);
         Render2D.drawTexture(
             matrices,
             bx + logoPad,
@@ -96,7 +101,7 @@ public class Watermark extends HudElement implements ThemeManager.ThemeChangeLis
             badge - logoPad * 2f,
             0f,
             LOGO_TEXTURE,
-            HudStyle.alphaCap(accent, 255)
+            logoColor
         );
 
         float tx = bx + badge + gap;

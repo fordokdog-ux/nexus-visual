@@ -23,6 +23,14 @@ public class Fullbright extends Module {
         return brightness.getValue().floatValue();
     }
 
+    public float getIntensity01() {
+        // Map legacy 1..32 slider into 0..1 for lightmap intensity.
+        float v = getBrightness() / 16.0f;
+        if (v < 0.0f) v = 0.0f;
+        if (v > 1.0f) v = 1.0f;
+        return v;
+    }
+
     @Override
     public void onEnable() {
         super.onEnable();
@@ -50,7 +58,8 @@ public class Fullbright extends Module {
     }
 
     private void applyGamma() throws Exception {
-        setGammaValue((double) getBrightness());
+        // Modern MC clamps gamma, so set it to max and let the lightmap hook do the real work.
+        setGammaValue(1.0);
     }
 
     private static Object getGammaOption() throws Exception {

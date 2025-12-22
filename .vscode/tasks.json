@@ -11,6 +11,38 @@
 			],
 			"isBackground": false,
 			"problemMatcher": []
+		},
+		{
+			"label": "gradle remapJar",
+			"type": "shell",
+			"command": "./gradlew.bat",
+			"args": [
+				"remapJar"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "gradle remapJar",
+			"type": "shell",
+			"command": "./gradlew.bat",
+			"args": [
+				"remapJar"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "copy jar to mods",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"Copy-Item \"d:\\1.21.4-Stable-пизда\\build\\libs\\nexusvisual-0.1.jar\" \"C:\\Users\\orest\\AppData\\Roaming\\.minecraft\\mods\\\" -Force"
+			],
+			"isBackground": false,
+			"problemMatcher": []
 		}
 	]
 }

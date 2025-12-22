@@ -26,8 +26,7 @@ public class Window {
 	private final Animation animation = new Animation(300, 1f, true, Easing.BOTH_SINE);
 	// Match theme background (respect theme alpha)
 	private static Color resolveBgColor() {
-		ThemeManager.Theme theme = ThemeManager.getInstance().getCurrentTheme();
-		Color bg = theme == null ? null : theme.getBackgroundColor();
+		Color bg = ThemeManager.getInstance().getBackgroundColor();
 		return bg == null ? new Color(30, 30, 30, 240) : bg;
 	}
 	

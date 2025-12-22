@@ -7,7 +7,7 @@ import dev.simplevisuals.client.util.animations.Easing;
 import dev.simplevisuals.client.util.math.MathUtils;
 import dev.simplevisuals.client.util.ColorUtils;
 import dev.simplevisuals.client.util.renderer.fonts.Fonts;
-import dev.simplevisuals.client.util.renderer.Render2D;
+import dev.simplevisuals.client.ui.clickgui.render.ClickGuiDraw;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.resource.language.I18n;
@@ -15,6 +15,7 @@ import org.lwjgl.glfw.GLFW;
 
 import java.awt.*;
 import dev.simplevisuals.client.managers.ThemeManager;
+import dev.simplevisuals.client.ui.clickgui.ClickGui;
 
 public class StringComponent extends Component {
 
@@ -32,35 +33,104 @@ public class StringComponent extends Component {
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         animation.update(typing);
 
-        float textX = x + 7.5f;
-        float textY = y + 2.5f;
-        float maxTextWidth = width - 16f;
-        float textWidth = Fonts.REGULAR.getWidth(I18n.translate(setting.getValue()), 8f);
-        
-        if (textWidth > maxTextWidth) {
-            if (textWidth - scrollOffset > maxTextWidth) scrollOffset = textWidth - maxTextWidth;
-            if (textWidth - scrollOffset < 0) scrollOffset = textWidth;
-        } else scrollOffset = 0f;
+        float ga = Math.max(0f, Math.min(1f, getGlobalAlpha()));
+        boolean lightUi = ClickGui.isGuiLightMode();
 
-        Render2D.drawRoundedRect(context.getMatrices(), x + 4f, y, width - 8f, height, 1.5f, ColorUtils.getGlobalColor());
+        Color themeText = ThemeManager.getInstance().getTextColor();
+        Color accent = ThemeManager.getInstance().getAccentColor();
 
-        Render2D.startScissor(context, x + 4, y, width - 8, height);
+        String label = I18n.translate(setting.getName());
+        String value = setting.getValue() == null ? "" : setting.getValue();
 
-        if (selected)
-            Render2D.drawRoundedRect(context.getMatrices(), textX, textY, Fonts.REGULAR.getWidth(I18n.translate(setting.getValue()), 8f), Fonts.REGULAR.getHeight(8f), 0f,
-                    new Color(ThemeManager.getInstance().getCurrentTheme().getAccentColor().getRed(),
-                            ThemeManager.getInstance().getCurrentTheme().getAccentColor().getGreen(),
-                            ThemeManager.getInstance().getCurrentTheme().getAccentColor().getBlue(),
-                            150));
+        boolean hovered = MathUtils.isHovered(x, y, width, height, (float) mouseX, (float) mouseY);
 
-        Render2D.drawFont(context.getMatrices(), Fonts.BOLD.getFont(8f), setting.getName(), textX, textY, new Color(255, 255, 255, (int) (255 * animation.getReversedValue())));
+        // Field background
+        float fieldX = x + 4f;
+        float fieldY = y + 1f;
+        float fieldW = width - 8f;
+        float fieldH = height - 2f;
+        float rr = 5f;
 
-        if (!setting.getValue().isEmpty())
-            Render2D.drawFont(context.getMatrices(), Fonts.BOLD.getFont(8f), I18n.translate(setting.getValue()), textX - scrollOffset, textY, new Color(255, 255, 255, (int) (255 * animation.getValue())));
+        int bgA = (int) ((lightUi ? 22f : 18f) * ga);
+        int bgHoverA = (int) ((lightUi ? 30f : 24f) * ga);
+        Color baseBg = lightUi ? new Color(0, 0, 0, bgA) : new Color(255, 255, 255, bgA);
+        Color hoverBg = lightUi ? new Color(0, 0, 0, bgHoverA) : new Color(255, 255, 255, bgHoverA);
+        ClickGuiDraw.roundedRect(fieldX, fieldY, fieldW, fieldH, rr, hovered ? hoverBg : baseBg);
 
-        Render2D.drawFont(context.getMatrices(), Fonts.REGULAR.getFont(8f), "|", textX - scrollOffset + textWidth, textY - 0.25f, ColorUtils.alpha(ColorUtils.pulse(Color.WHITE, 15), (int) (ColorUtils.pulse(Color.WHITE, 15).getAlpha() * animation.getValue())));
+        // Accent border when typing
+        int borderA = (int) ((typing ? 170f : 85f) * ga);
+        ClickGuiDraw.roundedBorder(fieldX, fieldY, fieldW, fieldH, rr, 1.0f,
+            new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), borderA));
 
-        Render2D.stopScissor(context);
+        int textA = (int) (Math.max(0f, Math.min(1f, ga)) * themeText.getAlpha());
+        Color labelCol = new Color(themeText.getRed(), themeText.getGreen(), themeText.getBlue(), textA);
+        Color valueCol = lightUi
+                ? new Color(25, 25, 25, (int) (235f * ga))
+                : new Color(235, 235, 235, (int) (235f * ga));
+
+        float fontSize = 7.5f;
+        float padX = 6f;
+        float padY = 3.2f;
+        float textX = fieldX + padX;
+        float textY = fieldY + padY;
+
+        // Label (left)
+        ClickGuiDraw.text(Fonts.BOLD.getFont(fontSize), label, textX, textY, labelCol);
+
+        // Value (right)
+        float valueAreaX = fieldX + fieldW * 0.52f;
+        float valueAreaW = fieldX + fieldW - valueAreaX - 6f;
+
+        float valueFont = 7.5f;
+        float valueTextW = Fonts.REGULAR.getWidth(value, valueFont);
+        float maxTextWidth = Math.max(8f, valueAreaW);
+
+        if (valueTextW > maxTextWidth) {
+            if (valueTextW - scrollOffset > maxTextWidth) scrollOffset = valueTextW - maxTextWidth;
+            if (valueTextW - scrollOffset < 0) scrollOffset = valueTextW;
+        } else {
+            scrollOffset = 0f;
+        }
+
+        // Clip value area (scale-aware)
+        float clipX = valueAreaX;
+        float clipY = fieldY;
+        float clipW = valueAreaW + 6f;
+        float clipH = fieldH;
+        if (mc.currentScreen instanceof ClickGui clickGui) {
+            clickGui.startScissorScaledPublic(context, clipX, clipY, clipW, clipH);
+        } else {
+            context.enableScissor((int) clipX, (int) clipY, (int) (clipX + clipW), (int) (clipY + clipH));
+        }
+
+        float valueX = fieldX + fieldW - 6f - Math.min(valueTextW, maxTextWidth);
+        float drawValueX = valueX - scrollOffset;
+
+        if (selected && !value.isEmpty()) {
+            ClickGuiDraw.roundedRect(drawValueX - 1f, textY - 0.6f,
+                Math.min(valueTextW, maxTextWidth) + 2f, Fonts.REGULAR.getHeight(valueFont) + 1.2f, 2f,
+                new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), (int) (80f * ga)));
+        }
+
+        if (!value.isEmpty()) {
+            ClickGuiDraw.text(Fonts.REGULAR.getFont(valueFont), value, drawValueX, textY, valueCol);
+        }
+
+        // Caret
+        if (typing) {
+            boolean blink = ((System.currentTimeMillis() / 450L) % 2L) == 0L;
+            if (blink) {
+                float caretX = drawValueX + valueTextW + 1f;
+                ClickGuiDraw.text(Fonts.REGULAR.getFont(valueFont), "|", caretX, textY - 0.2f,
+                    new Color(valueCol.getRed(), valueCol.getGreen(), valueCol.getBlue(), (int) (200f * ga)));
+            }
+        }
+
+        if (mc.currentScreen instanceof ClickGui clickGui) {
+            clickGui.stopScissorPublic(context);
+        } else {
+            context.disableScissor();
+        }
     }
 
     @Override

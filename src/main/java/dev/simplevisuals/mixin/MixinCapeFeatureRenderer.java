@@ -3,6 +3,7 @@ package dev.simplevisuals.mixin;
 import com.mojang.authlib.GameProfile;
 import dev.simplevisuals.client.managers.ModuleManager;
 import dev.simplevisuals.modules.impl.utility.Cape;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.PlayerListEntry;
 import net.minecraft.client.util.SkinTextures;
 import net.minecraft.util.Identifier;
@@ -23,17 +24,19 @@ public class MixinCapeFeatureRenderer {
 
     @Inject(method = "getSkinTextures", at = @At("RETURN"), cancellable = true)
     public void onGetSkinTextures(CallbackInfoReturnable<SkinTextures> cir) {
-        if (NexusVisual.getInstance().getModuleManager().getModule(Cape.class).isToggled()) {
+        Cape cape = NexusVisual.getInstance().getModuleManager().getModule(Cape.class);
+        if (cape == null || !cape.isToggled()) return;
+        if (!cape.applyTo(profile)) return;
+
         SkinTextures original = cir.getReturnValue();
         cir.setReturnValue(new SkinTextures(
-                original.texture(),
-                original.textureUrl(),
-                CUSTOM_CAPE,
-                original.elytraTexture(),
-                original.model(),
-                original.secure()
+            original.texture(),
+            original.textureUrl(),
+            CUSTOM_CAPE,
+            original.elytraTexture(),
+            original.model(),
+            original.secure()
         ));
-    }
     }
 }
 

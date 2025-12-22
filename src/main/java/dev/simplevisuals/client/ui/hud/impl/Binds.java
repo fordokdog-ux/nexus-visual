@@ -78,7 +78,7 @@ public class Binds extends HudElement {
 
         HudStyle.drawCard(matrices, x, y, w, h, radius, theme, 200, 120);
 
-        Color text = theme.getTextColor();
+        Color text = themeManager.getTextColor();
         Color subtle = HudStyle.alphaCap(text, 175);
 
         float titleX = x + pad;

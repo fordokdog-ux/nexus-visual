@@ -27,6 +27,8 @@ import dev.simplevisuals.util.licensing.LicenseManager;
 public class NexusVisual implements ModInitializer, Wrapper {
 
     public static final String MOD_ID = "simplevisuals";
+    // Storage folder name (configs/themes/license/etc)
+    public static final String DATA_DIR = "nexus";
 
     @Getter private static NexusVisual instance;
 
@@ -46,15 +48,18 @@ public class NexusVisual implements ModInitializer, Wrapper {
 
     public static Logger LOGGER = LogManager.getLogger(NexusVisual.class);
 
-    // Keep the existing folder name to not break existing configs.
-    private final File globalsDir = new File(mc.runDirectory, MOD_ID);
-    private final File configsDir = new File(globalsDir, "configs");
+    private File globalsDir;
+    private File configsDir;
 
     @Override
     public void onInitialize() {
         LOGGER.info("[Nexus Visual] Starting initialization.");
         initTime = System.currentTimeMillis();
         instance = this;
+
+        // Migrate storage folder name: <runDirectory>/simplevisuals -> <runDirectory>/nexus
+        globalsDir = initAndMigrateGlobalsDir();
+        configsDir = new File(globalsDir, "configs");
 
         createDirs(globalsDir, configsDir);
 
@@ -112,6 +117,58 @@ public class NexusVisual implements ModInitializer, Wrapper {
         });
 
         LOGGER.info("[Nexus Visual] Successfully initialized for {} ms.", System.currentTimeMillis() - initTime);
+    }
+
+    private File initAndMigrateGlobalsDir() {
+        File oldDir = new File(mc.runDirectory, MOD_ID);
+        File newDir = new File(mc.runDirectory, DATA_DIR);
+
+        try {
+            if (!newDir.exists() && oldDir.exists()) {
+                // Prefer atomic move (keeps everything, removes old folder)
+                try {
+                    java.nio.file.Files.move(oldDir.toPath(), newDir.toPath());
+                } catch (Throwable moveFailed) {
+                    // Fallback: create new dir and copy missing files from old
+                    newDir.mkdirs();
+                    copyMissingRecursive(oldDir.toPath(), newDir.toPath());
+                }
+            } else if (newDir.exists() && oldDir.exists()) {
+                // Merge: copy only missing files to the new dir
+                copyMissingRecursive(oldDir.toPath(), newDir.toPath());
+            }
+        } catch (Throwable ignored) {}
+
+        return newDir;
+    }
+
+    private void copyMissingRecursive(java.nio.file.Path src, java.nio.file.Path dst) throws java.io.IOException {
+        if (src == null || dst == null) return;
+        if (!java.nio.file.Files.exists(src)) return;
+        java.nio.file.Files.createDirectories(dst);
+
+        java.nio.file.Files.walkFileTree(src, new java.nio.file.SimpleFileVisitor<>() {
+            @Override
+            public java.nio.file.FileVisitResult preVisitDirectory(java.nio.file.Path dir, java.nio.file.attribute.BasicFileAttributes attrs) throws java.io.IOException {
+                java.nio.file.Path rel = src.relativize(dir);
+                java.nio.file.Path targetDir = dst.resolve(rel);
+                if (!java.nio.file.Files.exists(targetDir)) {
+                    java.nio.file.Files.createDirectories(targetDir);
+                }
+                return java.nio.file.FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public java.nio.file.FileVisitResult visitFile(java.nio.file.Path file, java.nio.file.attribute.BasicFileAttributes attrs) throws java.io.IOException {
+                java.nio.file.Path rel = src.relativize(file);
+                java.nio.file.Path target = dst.resolve(rel);
+                if (!java.nio.file.Files.exists(target)) {
+                    java.nio.file.Files.createDirectories(target.getParent());
+                    java.nio.file.Files.copy(file, target);
+                }
+                return java.nio.file.FileVisitResult.CONTINUE;
+            }
+        });
     }
 
     public static NexusVisual getInstance() {

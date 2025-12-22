@@ -69,12 +69,12 @@ public class JumpCircle extends Module implements ThemeManager.ThemeChangeListen
 
     @Override
     public void onThemeChanged(ThemeManager.Theme theme) {
-        this.currentColor = theme.getBackgroundColor();
+        this.currentColor = themeManager.getBackgroundColor();
     }
 
     @EventHandler
     public void onThemeChanged(EventThemeChanged event) {
-        this.currentColor = event.getTheme().getBackgroundColor();
+        this.currentColor = themeManager.getBackgroundColor();
     }
 
     @Override
@@ -146,7 +146,7 @@ public class JumpCircle extends Module implements ThemeManager.ThemeChangeListen
                 if (alpha <= 2) continue;
 
                 float r = size.getValue() * radiusMul;
-                Color base = useThemeColor.getValue() ? themeManager.getCurrentTheme().getBackgroundColor() : color.getColor();
+                Color base = useThemeColor.getValue() ? themeManager.getBackgroundColor() : color.getColor();
                 Color drawColor = new Color(base.getRed(), base.getGreen(), base.getBlue(), alpha);
 
                 MatrixStack matrices = e.getMatrices();

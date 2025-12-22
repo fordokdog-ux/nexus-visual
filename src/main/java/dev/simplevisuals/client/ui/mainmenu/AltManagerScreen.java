@@ -393,8 +393,9 @@ public class AltManagerScreen extends Screen {
             .render(matrix, l.panelX, l.panelY, 0f);
 
         String title = I18n.translate("simplevisuals.alt.title");
-        float titleX = l.panelX + 16f;
         float titleY = l.panelY + 18f;
+        float titleW = Fonts.BOLD.getWidth(title, 9f);
+        float titleX = l.panelX + (l.panelW - titleW) / 2f;
         new TextBuilder()
                 .font(Fonts.BOLD.font())
                 .text(title)

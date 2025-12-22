@@ -1,5 +1,8 @@
 package dev.simplevisuals.client.managers;
 
+import dev.simplevisuals.NexusVisual;
+import dev.simplevisuals.modules.impl.render.UI;
+
 import java.awt.Color;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -73,9 +76,65 @@ public class    ThemeManager {
         return currentTheme;
     }
 
+    private UI getUiModuleSafe() {
+        try {
+            NexusVisual nv = NexusVisual.getInstance();
+            if (nv == null) return null;
+            if (nv.getModuleManager() == null) return null;
+            return nv.getModuleManager().getModule(UI.class);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private boolean isOverrideEnabled() {
+        UI ui = getUiModuleSafe();
+        return ui != null && Boolean.TRUE.equals(ui.overrideThemeColors.getValue());
+    }
+
+    public Color getBackgroundColor() {
+        if (isOverrideEnabled()) {
+            UI ui = getUiModuleSafe();
+            if (ui != null) return ui.overrideBackgroundColor.getColor();
+        }
+        return currentTheme.getBackgroundColor();
+    }
+
+    public Color getSecondaryBackgroundColor() {
+        if (isOverrideEnabled()) {
+            UI ui = getUiModuleSafe();
+            if (ui != null) return ui.overrideSecondaryBackgroundColor.getColor();
+        }
+        return currentTheme.getSecondaryBackgroundColor();
+    }
+
+    public Color getAccentColor() {
+        if (isOverrideEnabled()) {
+            UI ui = getUiModuleSafe();
+            if (ui != null) return ui.overrideAccentColor.getColor();
+        }
+        return currentTheme.getAccentColor();
+    }
+
+    public Color getTextColor() {
+        if (isOverrideEnabled()) {
+            UI ui = getUiModuleSafe();
+            if (ui != null) return ui.overrideTextColor.getColor();
+        }
+        return currentTheme.getTextColor();
+    }
+
+    public Color getBorderColor() {
+        // If accent is overridden, make border consistent with accent.
+        if (isOverrideEnabled()) {
+            Color a = getAccentColor();
+            return new Color(a.getRed(), a.getGreen(), a.getBlue(), 120);
+        }
+        return currentTheme.getBorderColor();
+    }
+
     public Color getThemeColor() {
-        Color color = currentTheme.getBackgroundColor();
-        return color;
+        return getBackgroundColor();
     }
 
     public Theme[] getAvailableThemes() {

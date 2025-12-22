@@ -72,7 +72,7 @@ public class Potions extends HudElement implements ThemeManager.ThemeChangeListe
 
 	private void applyTheme(ThemeManager.Theme theme) {
 		this.negativeColor = new Color(200, 80, 80, 220);
-        this.highlightColor = theme.getAccentColor();
+		this.highlightColor = themeManager.getAccentColor();
 	}
 
 	@Override
@@ -136,7 +136,7 @@ public class Potions extends HudElement implements ThemeManager.ThemeChangeListe
 		}
 
 		ThemeManager.Theme theme = themeManager.getCurrentTheme();
-		Color textColor = theme.getTextColor();
+		Color textColor = themeManager.getTextColor();
 
 		// Вычисляем размеры (целевые)
 		float posX = getX();
@@ -209,7 +209,7 @@ public class Potions extends HudElement implements ThemeManager.ThemeChangeListe
 			boolean negative = type != null && !type.isBeneficial();
 			boolean low = eff != null && eff.getDuration() <= 200;
             // Берём актуальный акцент из темы на кадр, чтобы поддержать градиенты
-            Color liveAccent = themeManager.getCurrentTheme().getAccentColor();
+			Color liveAccent = themeManager.getAccentColor();
             Color draw = previewMode ? textColor : (low && highlightLowDuration.getValue() ? liveAccent : (negative ? negativeColor.brighter() : textColor));
 
 			String iconKeyActive = icons.get(i) == null ? "" : icons.get(i);

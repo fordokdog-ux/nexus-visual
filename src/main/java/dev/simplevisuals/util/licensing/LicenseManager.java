@@ -38,6 +38,8 @@ public final class LicenseManager {
     private static File licenseFile;
     private static File globalsDir;
 
+    private static final String MACHINE_GUID_CACHE_NAME = "machine_guid.cache";
+
     private LicenseManager() {}
 
     public static void init(File globalsDir) {
@@ -48,7 +50,7 @@ public final class LicenseManager {
     }
 
     public static String getServerUrl() {
-        // Optional override without rebuilding: <runDirectory>/simplevisuals/license_server.txt
+        // Optional override without rebuilding: <runDirectory>/<DATA_DIR>/license_server.txt
         try {
             if (globalsDir != null) {
                 Path p = new File(globalsDir, "license_server.txt").toPath();
@@ -198,6 +200,13 @@ public final class LicenseManager {
         String machineGuid = "";
         if (os.toLowerCase().contains("windows")) {
             machineGuid = safe(readWindowsMachineGuid());
+            if (!machineGuid.isBlank()) {
+                cacheWindowsMachineGuid(machineGuid);
+            } else {
+                // Важно: если чтение реестра временно не получилось (часто при VPN/политиках/кодировке),
+                // не откатываемся на MAC'и (они могут меняться/фильтроваться). Берём последнее успешное.
+                machineGuid = safe(readCachedWindowsMachineGuid());
+            }
         }
 
         if (!machineGuid.isBlank()) {
@@ -207,6 +216,28 @@ public final class LicenseManager {
         String macs = safe(readMacAddressesSorted());
         String raw = "NV|" + os + "|" + arch + "|" + macs;
         return sha256Hex(raw);
+    }
+
+    private static void cacheWindowsMachineGuid(String value) {
+        try {
+            if (globalsDir == null) return;
+            if (value == null || value.isBlank()) return;
+            Path p = new File(globalsDir, MACHINE_GUID_CACHE_NAME).toPath();
+            Files.createDirectories(p.getParent());
+            Files.writeString(p, value.trim(), StandardCharsets.UTF_8);
+        } catch (Throwable ignored) {}
+    }
+
+    private static String readCachedWindowsMachineGuid() {
+        try {
+            if (globalsDir == null) return "";
+            Path p = new File(globalsDir, MACHINE_GUID_CACHE_NAME).toPath();
+            if (!Files.exists(p)) return "";
+            String s = Files.readString(p, StandardCharsets.UTF_8);
+            return s == null ? "" : s.trim();
+        } catch (Throwable ignored) {
+            return "";
+        }
     }
 
     private static String safe(String s) {
@@ -231,6 +262,21 @@ public final class LicenseManager {
                 if (ni == null) continue;
                 try {
                     if (ni.isLoopback() || ni.isVirtual() || !ni.isUp()) continue;
+                } catch (Throwable ignored) {}
+
+                // VPN/TUN/TAP и подобные интерфейсы часто меняются и ломают HWID.
+                // Фильтруем по имени/описанию, если не помечены как virtual.
+                try {
+                    String n = (ni.getName() == null ? "" : ni.getName()).toLowerCase();
+                    String dn = (ni.getDisplayName() == null ? "" : ni.getDisplayName()).toLowerCase();
+                    String hay = n + " " + dn;
+                    if (n.startsWith("ppp")) continue;
+                    if (hay.contains("vpn") || hay.contains("wintun") || hay.contains("wireguard") || hay.contains("tun") || hay.contains("tap") ||
+                        hay.contains("hamachi") || hay.contains("zerotier") || hay.contains("tailscale") || hay.contains("openvpn") ||
+                        hay.contains("tunnel") || hay.contains("fortinet") || hay.contains("cisco") || hay.contains("pulse") ||
+                        hay.contains("checkpoint") || hay.contains("globalprotect")) {
+                        continue;
+                    }
                 } catch (Throwable ignored) {}
                 byte[] mac = null;
                 try {
@@ -258,7 +304,17 @@ public final class LicenseManager {
                     "MachineGuid"
             ).redirectErrorStream(true).start();
 
-            String out = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            byte[] bytes = p.getInputStream().readAllBytes();
+            // reg.exe output is commonly UTF-16LE when redirected; decoding as UTF-8 can randomly fail
+            // which makes HWID fall back to MACs (unstable under VPN).
+            String out;
+            try {
+                out = new String(bytes, StandardCharsets.UTF_16LE);
+                // If decoded incorrectly, it will contain many NULs; fallback to UTF-8.
+                if (out.indexOf('\u0000') >= 0) throw new IllegalStateException("nul_chars");
+            } catch (Throwable ignored) {
+                out = new String(bytes, StandardCharsets.UTF_8);
+            }
             String[] lines = out.split("\\r?\\n");
             for (String line : lines) {
                 if (line == null) continue;
@@ -268,10 +324,32 @@ public final class LicenseManager {
                     return parts[parts.length - 1].trim();
                 }
             }
-            return "";
-        } catch (Throwable t) {
-            return "";
+        } catch (Throwable ignored) {
+            // ignored
         }
+
+        // Fallback: query via PowerShell, which tends to return UTF-8 cleanly.
+        try {
+            Process p = new ProcessBuilder(
+                    "powershell",
+                    "-NoProfile",
+                    "-Command",
+                    "(Get-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Cryptography').MachineGuid"
+            ).redirectErrorStream(true).start();
+            String out = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
+            if (!out.isBlank()) {
+                // Sometimes it can contain extra lines; take the last non-empty token.
+                String[] lines = out.split("\\r?\\n");
+                for (int i = lines.length - 1; i >= 0; i--) {
+                    String line = lines[i];
+                    if (line == null) continue;
+                    String v = line.trim();
+                    if (!v.isEmpty()) return v;
+                }
+            }
+        } catch (Throwable ignored) {}
+
+        return "";
     }
 
     private static PublicKey decodePublicKey(String x509B64) throws Exception {

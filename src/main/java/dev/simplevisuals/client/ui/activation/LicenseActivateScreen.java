@@ -11,10 +11,14 @@ import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.text.Text;
 
+import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 
 public class LicenseActivateScreen extends Screen {
+
+    private static final String SAVED_KEY_FILENAME = "saved_key.txt";
 
     private final Screen parent;
 
@@ -42,6 +46,13 @@ public class LicenseActivateScreen extends Screen {
         keyField = new TextFieldWidget(this.textRenderer, x, y, boxW, 20, Text.literal("Ключ"));
         keyField.setMaxLength(128);
         keyField.setPlaceholder(Text.literal("Вставь ключ активации"));
+        
+        // Автоподстановка сохранённого ключа
+        String savedKey = loadSavedKey();
+        if (savedKey != null && !savedKey.isBlank()) {
+            keyField.setText(savedKey);
+        }
+        
         addDrawableChild(keyField);
 
         int btnW = (boxW - 6) / 2;
@@ -112,6 +123,9 @@ public class LicenseActivateScreen extends Screen {
                 Files.createDirectories(LicenseManager.getLicenseFile().toPath().getParent());
                 Files.writeString(LicenseManager.getLicenseFile().toPath(), licenseJson, StandardCharsets.UTF_8);
 
+                // Сохраняем ключ для будущей повторной активации
+                saveKey(code);
+
                 LicenseManager.refresh();
 
                 MinecraftClient.getInstance().execute(() -> {
@@ -140,6 +154,36 @@ public class LicenseActivateScreen extends Screen {
     private static String quote(String s) {
         if (s == null) return "\"\"";
         return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
+    }
+
+    /**
+     * Сохраняет ключ активации в файл для повторного использования
+     */
+    private static void saveKey(String key) {
+        try {
+            if (key == null || key.isBlank()) return;
+            File licFile = LicenseManager.getLicenseFile();
+            if (licFile == null) return;
+            Path keyPath = licFile.toPath().getParent().resolve(SAVED_KEY_FILENAME);
+            Files.createDirectories(keyPath.getParent());
+            Files.writeString(keyPath, key.trim(), StandardCharsets.UTF_8);
+        } catch (Throwable ignored) {}
+    }
+
+    /**
+     * Загружает ранее сохранённый ключ активации
+     */
+    private static String loadSavedKey() {
+        try {
+            File licFile = LicenseManager.getLicenseFile();
+            if (licFile == null) return null;
+            Path keyPath = licFile.toPath().getParent().resolve(SAVED_KEY_FILENAME);
+            if (!Files.exists(keyPath)) return null;
+            String key = Files.readString(keyPath, StandardCharsets.UTF_8);
+            return key == null ? null : key.trim();
+        } catch (Throwable ignored) {
+            return null;
+        }
     }
 
     @Override

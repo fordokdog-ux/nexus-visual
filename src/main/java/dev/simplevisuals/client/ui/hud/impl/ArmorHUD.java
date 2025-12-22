@@ -81,8 +81,8 @@ public class ArmorHUD extends HudElement implements ThemeManager.ThemeChangeList
     }
 
     private void applyTheme(ThemeManager.Theme theme) {
-        this.bgColor = theme.getBackgroundColor();
-        this.textColor = theme.getTextColor();
+        this.bgColor = themeManager.getBackgroundColor();
+        this.textColor = themeManager.getTextColor();
         this.headerTextColor = this.textColor;
         this.lowDurabilityColor = new Color(200, 80, 80, 220);
     }

@@ -73,12 +73,25 @@ public class Crosshair extends Module implements ThemeManager.ThemeChangeListene
         float w = thickness.getValue();
         float l = length.getValue();
 
-        Color base = useThemeColor.getValue() ? opaque(themeManager.getCurrentTheme().getBackgroundColor()) : opaque(color.getColor());
+        // Theme color should be readable on-world, so prefer theme accent (not background).
+        Color base = useThemeColor.getValue()
+            ? opaque(themeManager.getAccentColor())
+            : opaque(color.getColor());
         if (useEntityColor.getValue() && mc.crosshairTarget != null && mc.crosshairTarget.getType() == HitResult.Type.ENTITY) {
             base = opaque(entityColor);
         }
 
         var matrices = context.getMatrices();
+
+        // Make crosshair readable on any background: draw a subtle shadow (doesn't override color).
+        Color shadow = new Color(0, 0, 0, 140);
+        float sx = 0.5f;
+        float sy = 0.5f;
+        Render2D.drawRect(matrices, x + sx - w / 2, y + sy - currentGap - l, w, l, shadow);
+        Render2D.drawRect(matrices, x + sx - w / 2, y + sy + currentGap, w, l, shadow);
+        Render2D.drawRect(matrices, x + sx - currentGap - l, y + sy - w / 2, l, w, shadow);
+        Render2D.drawRect(matrices, x + sx + currentGap, y + sy - w / 2, l, w, shadow);
+
         Render2D.drawRect(matrices, x - w / 2, y - currentGap - l, w, l, base);
         Render2D.drawRect(matrices, x - w / 2, y + currentGap, w, l, base);
         Render2D.drawRect(matrices, x - currentGap - l, y - w / 2, l, w, base);
@@ -87,7 +100,7 @@ public class Crosshair extends Module implements ThemeManager.ThemeChangeListene
 
     @Override
     public void onThemeChanged(ThemeManager.Theme theme) {
-        this.currentColor = theme.getBackgroundColor();
+        this.currentColor = themeManager.getAccentColor();
     }
 
     @Override

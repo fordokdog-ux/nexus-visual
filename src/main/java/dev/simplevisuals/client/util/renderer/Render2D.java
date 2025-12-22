@@ -210,7 +210,18 @@ public class   Render2D implements Wrapper {
     }
     
     public void startScissor(DrawContext context, float x, float y, float width, float height) {
-    	context.enableScissor((int) x, (int) y, (int) (x + width), (int) (y + height));
+        // Scissor is not affected by matrix transforms.
+        // Using floor/ceil (instead of int cast) reduces jitter/clipping when UI is scaled.
+        int x1 = (int) Math.floor(x);
+        int y1 = (int) Math.floor(y);
+        int x2 = (int) Math.ceil(x + width);
+        int y2 = (int) Math.ceil(y + height);
+        // small safety margin to avoid 1px clipping due to rounding
+        x1 -= 1;
+        y1 -= 1;
+        x2 += 1;
+        y2 += 1;
+        context.enableScissor(x1, y1, x2, y2);
     }
     
     public void stopScissor(DrawContext context) {

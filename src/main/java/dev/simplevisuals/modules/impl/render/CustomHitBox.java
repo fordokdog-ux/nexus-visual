@@ -82,7 +82,7 @@ public class CustomHitBox extends Module implements ThemeManager.ThemeChangeList
             Vec3d interpolatedPos = entity.getLerpedPos(tickDelta);
             Box interpolatedBox = worldBox.offset(interpolatedPos.subtract(entity.getPos()));
 
-            Color base = useThemeColor.getValue() ? ThemeManager.getInstance().getCurrentTheme().getBackgroundColor() : color.getColor();
+            Color base = useThemeColor.getValue() ? ThemeManager.getInstance().getBackgroundColor() : color.getColor();
 
             if (fill.getValue()) {
                 Color fillColor = new Color(base.getRed(), base.getGreen(), base.getBlue(), fillAlpha.getValue().intValue());

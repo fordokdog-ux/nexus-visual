@@ -61,6 +61,7 @@ public class ModuleManager implements Wrapper {
                 new ItemPhysic(),
                 new FriendHelper(),
                 new Predictions(),
+                new FakePlayer(),
                 new BlockOverlay(),
                 new BetterMinecraft(),
                 new Zoom(),

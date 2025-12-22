@@ -6,7 +6,8 @@ import dev.simplevisuals.client.ui.clickgui.components.Component;
 import dev.simplevisuals.client.util.math.MathUtils;
 import dev.simplevisuals.client.util.ColorUtils;
 import dev.simplevisuals.client.util.renderer.fonts.Fonts;
-import dev.simplevisuals.client.util.renderer.Render2D;
+import dev.simplevisuals.client.ui.clickgui.ClickGui;
+import dev.simplevisuals.client.ui.clickgui.render.ClickGuiDraw;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.resource.language.I18n;
 import net.minecraft.util.math.MathHelper;
@@ -61,6 +62,10 @@ public class SliderComponent extends Component {
         // Параметры эффектов
         float scaleValue = 1f + 0.02f * hoverAmount;
         float fadeValue = Math.max(0f, Math.min(1f, getGlobalAlpha()));
+        boolean lightUi = ClickGui.isGuiLightMode();
+
+        Color themeText = ThemeManager.getInstance().getTextColor();
+        Color accent = ThemeManager.getInstance().getAccentColor();
 
         // Масштабирование области
         float centerX = x + width / 2f;
@@ -70,74 +75,75 @@ public class SliderComponent extends Component {
         float scaledWidth = width * scaleValue;
         float scaledHeight = height * scaleValue;
 
-        // Фон с hover эффектом
-        Color baseBg = new Color(40, 40, 40, (int) (100 * fadeValue));
-        Color hoverBg = new Color(50, 50, 50, (int) (120 * fadeValue));
-        Color bg = ColorUtils.fade(baseBg, hoverBg, hoverAmount);
-        Render2D.drawRoundedRect(context.getMatrices(), scaledX, scaledY, scaledWidth, scaledHeight, 4f, bg);
+        // Modern: keep row clean, show only a subtle hover background
+        int hoverA = (int) ((lightUi ? 18f : 12f) * fadeValue * hoverAmount);
+        if (hoverA > 0) {
+            Color hoverBg = lightUi ? new Color(0, 0, 0, hoverA) : new Color(255, 255, 255, hoverA);
+            ClickGuiDraw.roundedRect(scaledX + 2f, scaledY + 1f, scaledWidth - 4f, scaledHeight - 2f, 6f, hoverBg);
+        }
 
-        // Текст
-        int textA = (int) Math.max(0, Math.min(255, 255 * fadeValue));
+        // Текст (use theme text color)
+        int textA = (int) Math.max(0, Math.min(255, themeText.getAlpha() * fadeValue));
         float textOffset = hoverAmount * 1f;
-        Render2D.drawFont(context.getMatrices(), Fonts.BOLD.getFont(7.5f),
-                I18n.translate(setting.getName()),
-                scaledX + 4f + textOffset, scaledY + 3f,
-                new Color(255, 255, 255, textA));
+        ClickGuiDraw.text(
+            Fonts.BOLD.getFont(7.5f),
+            I18n.translate(setting.getName()),
+            scaledX + 4f + textOffset,
+            scaledY + 3f,
+            new Color(themeText.getRed(), themeText.getGreen(), themeText.getBlue(), textA)
+        );
 
-        // Трек
-        Color trackBg = new Color(23, 23, 23, (int) (100 * fadeValue));
-        Render2D.drawRoundedRect(context.getMatrices(), scaledX + 4f, scaledY + 13f,
-                scaledWidth - 8f, 4f, 0.5f, trackBg);
+        // Track (thicker pill)
+        float trackH = 5f;
+        float trackY = scaledY + 13f;
+        Color trackBg = lightUi
+            ? new Color(0, 0, 0, (int) (28f * fadeValue))
+            : new Color(255, 255, 255, (int) (22f * fadeValue));
+        ClickGuiDraw.roundedRect(scaledX + 4f, trackY, scaledWidth - 8f, trackH, trackH / 2f, trackBg);
 
         // Заполнение трека
-        Color accent = ThemeManager.getInstance().getCurrentTheme().getAccentColor();
-        int fillA = (int) Math.max(0, Math.min(255, 255 * fadeValue));
+        int fillA = (int) Math.max(0, Math.min(255, 210f * fadeValue));
         Color fillColor = new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), fillA);
         // легкое усиление при hover
         if (hoverAmount > 0f) {
             fillColor = ColorUtils.fade(fillColor,
-                    new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), (int) (Math.min(255, fillA * 1.2f))),
+                new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), (int) (Math.min(255, fillA * 1.2f))),
                     hoverAmount);
         }
         float fillWidth = (scaledWidth - 8f) * (animatedPixel / barWidth);
-        Render2D.drawRoundedRect(context.getMatrices(), scaledX + 4f, scaledY + 13f,
-                fillWidth, 4f, 0.5f, fillColor);
+        ClickGuiDraw.roundedRect(scaledX + 4f, trackY, fillWidth, trackH, trackH / 2f, fillColor);
 
-        // Ручка
-        float knobSize = (6f + 2f * hoverAmount) * scaleValue;
-        float knobX = scaledX + 1f + (animatedPixel / barWidth) * (scaledWidth - 8f) - (knobSize - 6f) / 2f;
-        float knobY = scaledY + 12f - (knobSize - 6f) / 2f;
+        // Knob (white) + subtle accent ring on hover
+        float knobSize = (8f + 2f * hoverAmount) * scaleValue;
+        float knobX = scaledX + 4f + (animatedPixel / barWidth) * (scaledWidth - 8f) - knobSize / 2f;
+        float knobY = trackY + (trackH - knobSize) / 2f;
         int knobA = (int) Math.max(0, Math.min(255, 255 * fadeValue));
-        Color knobColor = new Color(255, 255, 255, knobA);
-        if (hoverAmount > 0f) {
-            knobColor = ColorUtils.fade(knobColor,
-                    new Color(255, 255, 255, (int) Math.min(255, knobA * 1.1f)),
-                    hoverAmount);
-        }
-        Render2D.drawRoundedRect(context.getMatrices(),
-                knobX, knobY,
-                knobSize, knobSize,
-                knobSize / 2f, knobColor);
+        ClickGuiDraw.roundedRect(knobX, knobY, knobSize, knobSize, knobSize / 2f, new Color(255, 255, 255, knobA));
 
-        // Контур ручки
-        int outlineA = (int) (120 * fadeValue * hoverAmount);
-        if (outlineA > 0) {
-            Color outlineColor = new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), outlineA);
-            Render2D.drawRoundedRect(context.getMatrices(),
-                    knobX - 0.5f, knobY - 0.5f,
-                    knobSize + 1f, knobSize + 1f,
-                    knobSize / 2f + 0.5f, outlineColor);
+        int ringA = (int) (120 * fadeValue * hoverAmount);
+        if (ringA > 0) {
+            ClickGuiDraw.roundedBorder(knobX - 0.6f, knobY - 0.6f, knobSize + 1.2f, knobSize + 1.2f,
+                (knobSize + 1.2f) / 2f, 1.0f, new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), ringA));
         }
 
-        // Значение
-        Color baseText = ThemeManager.getInstance().getCurrentTheme().getTextColor();
-        Color textWithAlpha = new Color(baseText.getRed(), baseText.getGreen(), baseText.getBlue(),
-                Math.max(0, Math.min(255, (int) (baseText.getAlpha() * fadeValue))));
+        // Value pill (right)
+        Color textWithAlpha = new Color(themeText.getRed(), themeText.getGreen(), themeText.getBlue(),
+            Math.max(0, Math.min(255, (int) (themeText.getAlpha() * fadeValue))));
         String valueStr = String.valueOf(setting.getValue());
-        float valueOffset = hoverAmount * 1f;
-        Render2D.drawFont(context.getMatrices(), Fonts.BOLD.getFont(6f), valueStr,
-                scaledX + scaledWidth - Fonts.BOLD.getWidth(valueStr, 6.5f) - 4.5f + valueOffset,
-                scaledY + 5f, textWithAlpha);
+        float vf = 6.5f;
+        float vw = Fonts.BOLD.getWidth(valueStr, vf);
+        float pillH = 11f;
+        float pillW = Math.max(18f, vw + 10f);
+        float pillX = scaledX + scaledWidth - pillW - 4f;
+        float pillY = scaledY + 3.5f;
+        Color pillBg = lightUi
+            ? new Color(0, 0, 0, (int) (18f * fadeValue * (0.55f + 0.45f * hoverAmount)))
+            : new Color(255, 255, 255, (int) (14f * fadeValue * (0.55f + 0.45f * hoverAmount)));
+        ClickGuiDraw.roundedRect(pillX, pillY, pillW, pillH, pillH / 2f, pillBg);
+        ClickGuiDraw.text(Fonts.BOLD.getFont(vf), valueStr,
+            pillX + (pillW - vw) / 2f,
+            pillY + (pillH - Fonts.BOLD.getHeight(vf)) / 2f + 0.4f,
+            textWithAlpha);
     }
 
     @Override

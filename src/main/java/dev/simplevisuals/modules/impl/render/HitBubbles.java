@@ -56,7 +56,7 @@ public class HitBubbles extends Module implements ThemeManager.ThemeChangeListen
 
     @Override
     public void onThemeChanged(ThemeManager.Theme theme) {
-        this.currentColor = theme.getBackgroundColor();
+        this.currentColor = themeManager.getBackgroundColor();
     }
 
     @Override
@@ -128,7 +128,7 @@ public class HitBubbles extends Module implements ThemeManager.ThemeChangeListen
             if (alpha <= 2) continue;
 
             float r = size.getValue() * (0.6f + 0.4f * growVal); // Размер круга
-            Color base = useThemeColor.getValue() ? themeManager.getCurrentTheme().getBackgroundColor() : color.getColor();
+            Color base = useThemeColor.getValue() ? themeManager.getBackgroundColor() : color.getColor();
             Color drawColor = new Color(base.getRed(), base.getGreen(), base.getBlue(), alpha);
 
             // Настраиваем рендеринг

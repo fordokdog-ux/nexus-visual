@@ -224,10 +224,14 @@ public class ConfigAliasCommand extends Command {
             ChatUtils.sendMessage("§cКонфигурация '" + configName + "' не найдена");
             return;
         }
+
+        java.io.File newFile = new java.io.File(configManager.getConfigsDirectory(), configName + ".nexus");
+        java.io.File oldFile = new java.io.File(configManager.getConfigsDirectory(), configName + ".simple");
+        java.io.File actual = newFile.exists() ? newFile : (oldFile.exists() ? oldFile : newFile);
         
         ChatUtils.sendMessage("§6=== Информация о конфигурации '" + configName + "' ===");
-        ChatUtils.sendMessage("§7Файл: §e" + configName + ".simple");
-        ChatUtils.sendMessage("§7Путь: §e" + configManager.getConfigsDirectory() + "/" + configName + ".simple");
+        ChatUtils.sendMessage("§7Файл: §e" + actual.getName());
+        ChatUtils.sendMessage("§7Путь: §e" + actual.getAbsolutePath());
         ChatUtils.sendMessage("§7Статус: §aСуществует");
     }
     

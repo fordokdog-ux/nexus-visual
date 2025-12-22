@@ -26,6 +26,7 @@ public class TotemCounter extends Module {
 
     @EventHandler
     public void onRender2D(EventRender2D e) {
+        if (!isToggled()) return;
         if (fullNullCheck()) return;
 
         MinecraftClient mc = MinecraftClient.getInstance();
@@ -33,6 +34,9 @@ public class TotemCounter extends Module {
 
         // Count totems in player's inventory
         int totemCount = countTotems();
+
+        // Nothing to show
+        if (totemCount <= 0) return;
 
         // Get screen coordinates for crosshair
         float centerX = mc.getWindow().getScaledWidth() / 2.0f;

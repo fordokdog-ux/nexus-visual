@@ -9,7 +9,6 @@ import dev.simplevisuals.client.util.animations.Animation;
 import dev.simplevisuals.client.util.animations.Easing;
 import dev.simplevisuals.client.util.math.MathUtils;
 import dev.simplevisuals.client.util.renderer.fonts.Fonts;
-import dev.simplevisuals.client.util.renderer.Render2D;
 import lombok.Getter;
 import net.minecraft.client.gui.DrawContext;
 import org.lwjgl.glfw.GLFW;
@@ -20,6 +19,7 @@ import java.util.List;
 import dev.simplevisuals.client.managers.ThemeManager;
 import net.minecraft.client.resource.language.I18n;
 import dev.simplevisuals.client.ui.clickgui.ClickGui;
+import dev.simplevisuals.client.ui.clickgui.render.ClickGuiDraw;
 
 public class ModuleComponent extends Component {
 
@@ -58,6 +58,7 @@ public class ModuleComponent extends Component {
             else if (setting instanceof StringSetting) components.add(new StringComponent((StringSetting) setting));
             else if (setting instanceof ListSetting) components.add(new ListComponent((ListSetting) setting));
             else if (setting instanceof BindSetting) components.add(new BindComponent((BindSetting) setting));
+            else if (setting instanceof ColorSetting) components.add(new ColorComponent((ColorSetting) setting));
         }
     }
 
@@ -97,23 +98,48 @@ public class ModuleComponent extends Component {
         openAnimation.update(open);
         bindMenuAnimation.update(showBindModeMenu);
 
-        // фон
-        Color base = new Color(67, 67, 67, (int) (120 * Math.max(0f, Math.min(1f, globalAlpha))));
-        Color themeAccent = ThemeManager.getInstance().getCurrentTheme().getAccentColor();
-        Color active = new Color(themeAccent.getRed(), themeAccent.getGreen(), themeAccent.getBlue(), 180);
-        Color bg = base;
+        boolean lightUi = ClickGui.isGuiLightMode();
+        Color themeAccent = ThemeManager.getInstance().getAccentColor();
 
+        float aMul = (float) Math.max(0f, Math.min(1f, globalAlpha));
+        int ga = (int) (255 * aMul);
+
+        // Modern flat design - slightly transparent cards
+        int cardA = (int) ((lightUi ? 242f : 190f) * aMul);
+        int cardHoverA = (int) ((lightUi ? 255f : 215f) * aMul);
+        Color cardBg = lightUi ? new Color(255, 255, 255, cardA) : new Color(26, 26, 34, cardA);
+        Color cardHoverBg = lightUi ? new Color(255, 255, 255, cardHoverA) : new Color(36, 36, 46, cardHoverA);
+
+        float r = 10f;
         float totalHeight = getHeight();
-        Render2D.drawRoundedRect(context.getMatrices(), x, y, width, totalHeight, 5f, bg);
 
+        // Modern flat card - no shadows
+        Color base = hovered ? cardHoverBg : cardBg;
+        ClickGuiDraw.roundedRect(x, y, width, totalHeight, r, base);
 
-        Color textColor = new Color(255, 255, 255, (int) ((200 + 55 * hoverAnim.getValue()) * Math.max(0f, Math.min(1f, globalAlpha))));
-        float titleFontSize = 8f;
+        // Very subtle accent tint when enabled (modern state)
+        if (module.isToggled()) {
+            int tintA = (int) ((lightUi ? 16f : 22f) * aMul);
+            ClickGuiDraw.roundedRect(x, y, width, totalHeight, r,
+                new Color(themeAccent.getRed(), themeAccent.getGreen(), themeAccent.getBlue(), tintA));
+        }
+
+        // Subtle border only on hover
+        if (hovered) {
+            Color border = lightUi
+                ? new Color(0, 0, 0, (int) (40f * aMul))
+                : new Color(255, 255, 255, (int) (35f * aMul));
+            ClickGuiDraw.roundedBorder(x, y, width, totalHeight, r, 1.0f, border);
+        }
+
+        Color textColor = lightUi
+            ? new Color(25, 25, 25, (int) ((215 + 35 * hoverAnim.getValue()) * aMul))
+            : new Color(235, 235, 235, (int) ((215 + 35 * hoverAnim.getValue()) * aMul));
+        float titleFontSize = 8.5f;
         float titleFontH = Fonts.REGULAR.getHeight(titleFontSize);
         float titleY = y + (HEADER_HEIGHT - titleFontH) / 2f;
         String localizedModuleName = I18n.translate(module.getName());
-        Render2D.drawFont(context.getMatrices(), Fonts.BOLD.getFont(titleFontSize),
-                localizedModuleName, x + 8f, titleY, textColor);
+        ClickGuiDraw.text(Fonts.BOLD.getFont(titleFontSize), localizedModuleName, x + 8f, titleY, textColor);
 
         // биндинг — вычисляем позицию и хитбокс
         String bindText = "";
@@ -143,12 +169,11 @@ public class ModuleComponent extends Component {
                 // переключатель (ползунок) состояния модуля, как у BooleanSetting
         float switchW = 20f;
         float switchH = 10f;
-        float reservedRight = 0f; // фиксированное положение: без учёта текста бинда
-        float switchX = x + width - reservedRight - 24f; // 24f = ширина переключателя + отступ
+        float switchPadR = 10f;
+        float switchX = x + width - switchW - switchPadR;
         float switchY = y + (HEADER_HEIGHT - switchH) / 2f;
 
-                boolean lightUi = ClickGui.isGuiLightMode();
-                Color accent = ThemeManager.getInstance().getCurrentTheme().getAccentColor();
+                Color accent = ThemeManager.getInstance().getAccentColor();
                 int accentSum = accent.getRed() + accent.getGreen() + accent.getBlue();
                 // если акцент слишком белый — делаем его серее, чтобы не "заливало" весь тумблер
                 Color safeAccent = accentSum > 720
@@ -157,38 +182,44 @@ public class ModuleComponent extends Component {
 
         float progress = isToggleAnimating ? (float) toggleAnim.getValue() : (currentState ? 1f : 0f);
 
-                int ga = (int) (255 * Math.max(0f, Math.min(1f, globalAlpha)));
-                Color trackBase = lightUi
-                    ? new Color(230, 230, 230, (int) (170 * ga / 255f))
-                    : new Color(23, 23, 23, (int) (160 * ga / 255f));
-                Color trackOn = new Color(safeAccent.getRed(), safeAccent.getGreen(), safeAccent.getBlue(), (int) (190 * progress * ga / 255f));
-
-                // базовая дорожка
-                Render2D.drawRoundedRect(context.getMatrices(), switchX, switchY, switchW, switchH, 4f, trackBase);
-                // подсветка включения (не 255, чтобы не было "белого кирпича")
-                if (progress > 0.01f) {
-                    Render2D.drawRoundedRect(context.getMatrices(), switchX, switchY, switchW, switchH, 4f, trackOn);
-                }
+                // Modern pill-style toggle
+                Color trackOff = lightUi
+                    ? new Color(200, 200, 205, (int) (180 * ga / 255f))
+                    : new Color(50, 50, 58, (int) (200 * ga / 255f));
+                Color trackOn = new Color(safeAccent.getRed(), safeAccent.getGreen(), safeAccent.getBlue(), (int) (230 * ga / 255f));
+                
+                // Interpolate track color based on progress
+                int tr = (int) (trackOff.getRed() + (trackOn.getRed() - trackOff.getRed()) * progress);
+                int tg = (int) (trackOff.getGreen() + (trackOn.getGreen() - trackOff.getGreen()) * progress);
+                int tb = (int) (trackOff.getBlue() + (trackOn.getBlue() - trackOff.getBlue()) * progress);
+                int ta = (int) (trackOff.getAlpha() + (trackOn.getAlpha() - trackOff.getAlpha()) * progress);
+                Color trackColor = new Color(tr, tg, tb, ta);
+                
+                ClickGuiDraw.roundedRect(switchX, switchY, switchW, switchH, switchH / 2f, trackColor);
 
         float thumbW = 8f;
         float thumbH = 8f;
-        // Увеличенный симметричный отступ 1.5f с обеих сторон
-        float padding = 1.5f;
+        float padding = 1f;
         float thumbX = switchX + padding + (switchW - thumbW - 2f * padding) * progress;
-        float thumbY = switchY + padding + (switchH - thumbH - 2f * padding) / 2f;
-                Color thumb = lightUi ? new Color(35, 35, 35, ga) : new Color(245, 245, 245, ga);
-                Color thumbBorder = lightUi ? new Color(0, 0, 0, (int) (90 * ga / 255f)) : new Color(255, 255, 255, (int) (60 * ga / 255f));
-                Render2D.drawRoundedRect(context.getMatrices(), thumbX, thumbY, thumbW, thumbH, 3f, thumb);
-                Render2D.drawBorder(context.getMatrices(), thumbX, thumbY, thumbW, thumbH, 3f, 0.6f, 0.6f, thumbBorder);
+        float thumbY = switchY + (switchH - thumbH) / 2f;
+                // Clean white thumb
+            Color thumb = lightUi
+                ? new Color(255, 255, 255, ga)
+                : new Color(250, 250, 252, ga);
+                ClickGuiDraw.roundedRect(thumbX, thumbY, thumbW, thumbH, thumbH / 2f, thumb);
 
         // дочерние компоненты (без анимации раскрытия)
         if (open && !renderExternally) {
             float childY = y + HEADER_HEIGHT;
             float visibleH = getChildrenFullHeight();
 
-            // клип ограничен рамкой модуля
-            context.enableScissor((int) x, (int) (y + HEADER_HEIGHT),
-                    (int) (x + width), (int) (y + HEADER_HEIGHT + visibleH));
+            // clip must respect ClickGUI ui-scale
+            if (mc.currentScreen instanceof ClickGui clickGui) {
+                clickGui.startScissorScaledPublic(context, x, y + HEADER_HEIGHT, width, visibleH);
+            } else {
+                context.enableScissor((int) x, (int) (y + HEADER_HEIGHT),
+                        (int) (x + width), (int) (y + HEADER_HEIGHT + visibleH));
+            }
 
             for (Component component : components) {
                 if (!component.getVisible().get()) continue;
@@ -201,7 +232,11 @@ public class ModuleComponent extends Component {
                 childY += component.getHeight() + component.getAddHeight().get();
             }
 
-            context.disableScissor();
+            if (mc.currentScreen instanceof ClickGui clickGui) {
+                clickGui.stopScissorPublic(context);
+            } else {
+                context.disableScissor();
+            }
         }
 
         // теперь отрисуем маленький текст бинда снизу (после детей, чтобы не клипался)
@@ -209,9 +244,15 @@ public class ModuleComponent extends Component {
             float totalHeightAfter = getHeight();
             bindTextX = x + 8f;
             bindTextY = y + totalHeightAfter - bindTextH - 1f;
-            Render2D.drawFont(context.getMatrices(), Fonts.REGULAR.getFont(bindFontSize),
-                    bindText, bindTextX, bindTextY,
-                    new Color(200, 200, 200, (int) (180 * Math.max(0f, Math.min(1f, globalAlpha)))));
+            ClickGuiDraw.text(
+                    Fonts.REGULAR.getFont(bindFontSize),
+                    bindText,
+                    bindTextX,
+                    bindTextY,
+                    lightUi
+                            ? new Color(90, 90, 90, (int) (180 * aMul))
+                            : new Color(200, 200, 200, (int) (180 * aMul))
+            );
         }
 
         // Контекстное меню режима бинда (мгновенное появление, без анимации масштаба/альфы)
@@ -235,7 +276,7 @@ public class ModuleComponent extends Component {
             float menuY = menuYBase + slideOffset;
 
             Color menuBg = new Color(20, 20, 20, (int) (220 * a * Math.max(0f, Math.min(1f, globalAlpha))));
-            Render2D.drawRoundedRect(context.getMatrices(), menuX, menuY, itemW, itemH * 2 + 7f, 3f, menuBg);
+            ClickGuiDraw.roundedRect(menuX, menuY, itemW, itemH * 2 + 7f, 3f, menuBg);
 
             String opt1 = "Toggle";
             String opt2 = "Hold";
@@ -245,13 +286,13 @@ public class ModuleComponent extends Component {
 
             int textAlpha = (int) (255 * a * Math.max(0f, Math.min(1f, globalAlpha)));
             // Toggle row
-            Render2D.drawFont(context.getMatrices(), Fonts.BOLD.getFont(7f), opt1, menuX + 18f, menuY + 5f, new Color(255, 255, 255, textAlpha));
-            Render2D.drawFont(context.getMatrices(), Fonts.ICONS.getFont(10f), "D", menuX + 6f, menuY + 5.5f,
+                ClickGuiDraw.text(Fonts.BOLD.getFont(7f), opt1, menuX + 18f, menuY + 5f, new Color(255, 255, 255, textAlpha));
+                ClickGuiDraw.text(Fonts.ICONS.getFont(10f), "D", menuX + 6f, menuY + 5.5f,
                     new Color(0, 0, 0, (int) ((isToggle ? 255 : 0) * a * Math.max(0f, Math.min(1f, globalAlpha)))));
 
             // Hold row
-            Render2D.drawFont(context.getMatrices(), Fonts.BOLD.getFont(7f), opt2, menuX + 18f, menuY + 5f + itemH, new Color(255, 255, 255, textAlpha));
-            Render2D.drawFont(context.getMatrices(), Fonts.ICONS.getFont(10f), "D", menuX + 6f, menuY + 5.5f + itemH,
+                ClickGuiDraw.text(Fonts.BOLD.getFont(7f), opt2, menuX + 18f, menuY + 5f + itemH, new Color(255, 255, 255, textAlpha));
+                ClickGuiDraw.text(Fonts.ICONS.getFont(10f), "D", menuX + 6f, menuY + 5.5f + itemH,
                     new Color(0, 0, 0, (int) ((isHold ? 255 : 0) * a * Math.max(0f, Math.min(1f, globalAlpha)))));
         }
     }
@@ -405,7 +446,12 @@ public class ModuleComponent extends Component {
                                           float clipX, float clipY, float clipW, float clipH, int mouseX, int mouseY, float delta, float scrollY) {
         float childY = contentY - scrollY;
         float totalHeight = 0f;
-        context.enableScissor((int) clipX, (int) clipY, (int) (clipX + clipW), (int) (clipY + clipH));
+
+        if (mc.currentScreen instanceof ClickGui clickGui) {
+            clickGui.startScissorScaledPublic(context, clipX, clipY, clipW, clipH);
+        } else {
+            context.enableScissor((int) clipX, (int) clipY, (int) (clipX + clipW), (int) (clipY + clipH));
+        }
         for (Component component : components) {
             if (!component.getVisible().get()) continue;
             component.setX(contentX + 5f);
@@ -418,7 +464,11 @@ public class ModuleComponent extends Component {
             childY += h;
             totalHeight += h;
         }
-        context.disableScissor();
+        if (mc.currentScreen instanceof ClickGui clickGui) {
+            clickGui.stopScissorPublic(context);
+        } else {
+            context.disableScissor();
+        }
         return totalHeight;
     }
 

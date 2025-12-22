@@ -219,11 +219,13 @@ public class MainMenu extends Screen {
             .build()
             .render(matrix, panelX, panelY, 0f);
 
-        // Header
-        float headerX = panelX + 16f;
+        // Header (centered)
         float headerY = panelY + 18f;
+        float panelCenterX = panelX + panelWidth / 2f;
 
         String header = I18n.translate("simplevisuals.mainmenu.screen_title");
+        float headerW = Fonts.BOLD.getWidth(header, 9.5f);
+        float headerX = panelCenterX - headerW / 2f;
         new TextBuilder()
             .font(Fonts.BOLD.font())
             .text(header)
@@ -234,6 +236,8 @@ public class MainMenu extends Screen {
             .render(matrix, headerX, headerY, 0f);
 
         String subtitle = I18n.translate("simplevisuals.mainmenu.title");
+        float subtitleW = Fonts.REGULAR.getWidth(subtitle, 6.5f);
+        float subtitleX = panelCenterX - subtitleW / 2f;
         new TextBuilder()
             .font(Fonts.REGULAR.font())
             .text(subtitle)
@@ -241,7 +245,7 @@ public class MainMenu extends Screen {
             .color(new Color(170, 170, 195, (int) (alpha * 255)))
             .smoothness(0.5f)
             .build()
-            .render(matrix, headerX, headerY + 16f, 0f);
+            .render(matrix, subtitleX, headerY + 16f, 0f);
 
         // Копирайт
         String copyright = I18n.translate("simplevisuals.mainmenu.copyright");

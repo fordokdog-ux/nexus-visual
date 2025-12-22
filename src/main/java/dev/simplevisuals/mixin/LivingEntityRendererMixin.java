@@ -56,7 +56,7 @@ public abstract class LivingEntityRendererMixin<S extends LivingEntityRenderStat
     public int getMixColor(S state) {
         HitColor module = NexusVisual.getInstance().getModuleManager().getModule(HitColor.class);
         if (module != null && module.isToggled() && Boolean.TRUE.equals(SV_SHOULD_TINT.get())) {
-            java.awt.Color theme = ThemeManager.getInstance().getCurrentTheme().getBackgroundColor();
+            java.awt.Color theme = ThemeManager.getInstance().getBackgroundColor();
             int a = (int) (255 * module.alpha.getValue());
             return new java.awt.Color(theme.getRed(), theme.getGreen(), theme.getBlue(), a).getRGB();
         }

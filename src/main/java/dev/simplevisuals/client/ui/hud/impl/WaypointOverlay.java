@@ -26,10 +26,10 @@ public class WaypointOverlay implements Wrapper, ThemeManager.ThemeChangeListene
     }
 
     private void applyTheme(ThemeManager.Theme theme) {
-        this.textColor = theme.getTextColor();
-        Color bg = theme.getBackgroundColor();
+        this.textColor = themeManager.getTextColor();
+        Color bg = themeManager.getBackgroundColor();
         this.bgColor = bg == null ? new Color(30, 30, 30, 170) : bg;
-        this.accent = theme.getAccentColor();
+        this.accent = themeManager.getAccentColor();
     }
 
     @Override

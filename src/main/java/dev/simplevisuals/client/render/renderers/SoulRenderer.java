@@ -43,7 +43,8 @@ public class SoulRenderer {
                        float lastKnownHeight,
                        float lastKnownWidth,
                        float alphaMultiplier,
-                       Color overrideColor) {
+                       Color overrideColor,
+                       Color overrideColorSecondary) {
         if (target == null && animationValue <= 0) return;
 
         var camera = mc.gameRenderer.getCamera();
@@ -92,11 +93,18 @@ public class SoulRenderer {
         }
 
         float ageMultiplier = iAge * 2.5f;
-        Color themeColor = overrideColor != null ? overrideColor : themeManager.getThemeColor();
+        Color themeColor = themeManager.getThemeColor();
+        Color c1 = overrideColor != null ? overrideColor : themeColor;
+        Color c2 = overrideColorSecondary != null ? overrideColorSecondary : c1;
 
-        int baseR = themeColor.getRed();
-        int baseG = themeColor.getGreen();
-        int baseB = themeColor.getBlue();
+        int c1r = c1.getRed();
+        int c1g = c1.getGreen();
+        int c1b = c1.getBlue();
+        int c1a = c1.getAlpha();
+        int c2r = c2.getRed();
+        int c2g = c2.getGreen();
+        int c2b = c2.getBlue();
+        int c2a = c2.getAlpha();
 
         float scale = ghostsWidth;
         float glowScale = scale * (1.0f + (float) ghostsGlowIntensity);
@@ -133,7 +141,10 @@ public class SoulRenderer {
             for (int pass = 0; pass < 3; pass++) {
                 for (int i = 0; i < length; i++) {
                     float t = length <= 1 ? 1f : (i / (float) (length - 1));
-                    float fade = animationValue * t;
+                    // IMPORTANT: do not use t as fade, иначе один конец трэйла становится почти невидимым,
+                    // и градиент "ломается" (кажется, что второй цвет еле-еле или вообще один).
+                    float trail = 1f - t;
+                    float fade = animationValue * (0.6f + 0.4f * trail);
                     if (fade <= 0.0001f) continue;
                     fade = Math.min(1f, fade);
                     fade = fade * fade;
@@ -159,9 +170,15 @@ public class SoulRenderer {
                         offZ = -s;
                     }
 
-                    int a = clamp255(180 * ghostsGlowIntensity * fade * alphaMultiplier);
+                    float mix = t; // 0 -> c1, 1 -> c2 (чистый градиент по длине)
+                    int r = (int) (c1r + (c2r - c1r) * mix);
+                    int g = (int) (c1g + (c2g - c1g) * mix);
+                    int b = (int) (c1b + (c2b - c1b) * mix);
+                    float userAlpha = (c1a + (c2a - c1a) * mix) / 255f;
+
+                    int a = clamp255(180 * ghostsGlowIntensity * fade * alphaMultiplier * userAlpha);
                     if (a <= 0) continue;
-                    int rgba = (a & 0xFF) << 24 | (baseR & 0xFF) << 16 | (baseG & 0xFF) << 8 | (baseB & 0xFF);
+                    int rgba = (a & 0xFF) << 24 | (r & 0xFF) << 16 | (g & 0xFF) << 8 | (b & 0xFF);
 
                     if (glowBuffer == null) {
                         glowBuffer = Tessellator.getInstance().begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_TEXTURE_COLOR);
@@ -183,7 +200,8 @@ public class SoulRenderer {
         for (int pass = 0; pass < 3; pass++) {
             for (int i = 0; i < length; i++) {
                 float t = length <= 1 ? 1f : (i / (float) (length - 1));
-                float fade = animationValue * t;
+                float trail = 1f - t;
+                float fade = animationValue * (0.6f + 0.4f * trail);
                 if (fade <= 0.0001f) continue;
                 fade = Math.min(1f, fade);
                 fade = fade * fade;
@@ -209,9 +227,15 @@ public class SoulRenderer {
                     offZ = -s;
                 }
 
-                int a = clamp255(230 * fade * alphaMultiplier);
+                float mix = t;
+                int r = (int) (c1r + (c2r - c1r) * mix);
+                int g = (int) (c1g + (c2g - c1g) * mix);
+                int b = (int) (c1b + (c2b - c1b) * mix);
+                float userAlpha = (c1a + (c2a - c1a) * mix) / 255f;
+
+                int a = clamp255(230 * fade * alphaMultiplier * userAlpha);
                 if (a <= 0) continue;
-                int rgba = (a & 0xFF) << 24 | (baseR & 0xFF) << 16 | (baseG & 0xFF) << 8 | (baseB & 0xFF);
+                int rgba = (a & 0xFF) << 24 | (r & 0xFF) << 16 | (g & 0xFF) << 8 | (b & 0xFF);
 
                 if (buffer == null) {
                     buffer = Tessellator.getInstance().begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_TEXTURE_COLOR);

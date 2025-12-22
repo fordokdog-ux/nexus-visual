@@ -10,6 +10,7 @@ import dev.simplevisuals.client.util.math.MathUtils;
 import dev.simplevisuals.client.util.renderer.Render2D;
 import dev.simplevisuals.client.util.renderer.fonts.Fonts;
 import dev.simplevisuals.client.managers.ThemeManager;
+import dev.simplevisuals.client.util.world.WorldUtils;
 import dev.simplevisuals.modules.settings.impl.BooleanSetting;
 import dev.simplevisuals.modules.settings.impl.ListSetting;
 import dev.simplevisuals.modules.impl.utility.NameProtect;
@@ -47,6 +48,7 @@ public class TargetHud extends HudElement implements ThemeManager.ThemeChangeLis
 
     // Settings
     private final BooleanSetting displayAbsorption = new BooleanSetting("displayAbsorption", true);
+    private final BooleanSetting followTarget = new BooleanSetting("targethud.follow", false);
     // Hard-disabled: user requested no HUD particles on hit.
     private final BooleanSetting displayHudParticles = new BooleanSetting("hudParticles", false, () -> false);
     private final ListSetting style;
@@ -63,13 +65,14 @@ public class TargetHud extends HudElement implements ThemeManager.ThemeChangeLis
         this.style = new ListSetting("targethud.style", () -> true, true, optDefault, optCard).setSingleSelect(true);
 
         getSettings().add(displayAbsorption);
+        getSettings().add(followTarget);
         getSettings().add(style);
     }
 
     private void applyTheme(ThemeManager.Theme theme) {
-        Color tb = theme.getBackgroundColor();
+        Color tb = themeManager.getBackgroundColor();
         this.bgColor = tb == null ? new Color(30, 30, 30, 240) : tb;
-        this.textColor = theme.getTextColor();
+        this.textColor = themeManager.getTextColor();
 
         this.headerTextColor = this.textColor;
         this.lowDurabilityColor = new Color(200, 80, 80, 220);
@@ -97,8 +100,10 @@ public class TargetHud extends HudElement implements ThemeManager.ThemeChangeLis
     private LivingEntity lastTarget = null;
     private long lastSeenTime = 0L;
     private static final long HUD_DURATION = 2000;
+    private static final long OCCLUSION_DEBOUNCE_MS = 220;
     private boolean forceFade = false;
     private Vec3d lastKnownCenter = null;
+    private long occludedSinceMs = 0L;
 
     private float animationDirectionX = 1f;
     private float animationDirectionY = 1f;
@@ -244,6 +249,26 @@ public class TargetHud extends HudElement implements ThemeManager.ThemeChangeLis
         return hr.getType() != HitResult.Type.MISS;
     }
 
+    private boolean isOccludedForHud(LivingEntity ent, EventRender2D e) {
+        if (ent == null) return true;
+        Vec3d from = mc.player.getCameraPosVec(e.getTickDelta());
+
+        // Проверяем несколько точек модели. Это снижает ложные срабатывания,
+        // когда центр сущности «попадает» за полублок/стенку, но сама сущность видна.
+        Vec3d lerped = ent.getLerpedPos(e.getTickDelta());
+        double w = Math.max(0.25, ent.getWidth() * 0.35);
+        Vec3d center = lerped.add(0, ent.getHeight() * 0.55, 0);
+        Vec3d head = lerped.add(0, ent.getHeight() * 0.85, 0);
+        Vec3d left = center.add(w, 0, 0);
+        Vec3d right = center.add(-w, 0, 0);
+
+        // Если хотя бы одна точка НЕ перекрыта — считаем, что таргет видим.
+        return isOccluded(from, center)
+                && isOccluded(from, head)
+                && isOccluded(from, left)
+                && isOccluded(from, right);
+    }
+
     private Color getHitColor(LivingEntity entity, int alpha) {
         return new Color(255, 255, 255, alpha); // стандартный цвет
     }
@@ -261,12 +286,15 @@ public class TargetHud extends HudElement implements ThemeManager.ThemeChangeLis
             if (hit.getEntity() instanceof LivingEntity living && living.isAlive()) {
                 Vec3d center = entityCenter(living, e);
 
-                if (isInvisibleAndUnrevealed(living)) {
-                } else if (isOccluded(mc.player.getCameraPosVec(e.getTickDelta()), center)) {
-                    lastTarget = null;
-                    forceFade = true;
-                    lastKnownCenter = center;
+                if (isOccludedForHud(living, e)) {
+                    if (occludedSinceMs == 0L) occludedSinceMs = now;
+                    if (now - occludedSinceMs >= OCCLUSION_DEBOUNCE_MS) {
+                        lastTarget = null;
+                        forceFade = true;
+                        lastKnownCenter = center;
+                    }
                 } else {
+                    occludedSinceMs = 0L;
                     if (lastTarget == null) {
                         animationDirectionX = (float) (Math.random() * 2 - 1);
                         animationDirectionY = (float) (Math.random() * 2 - 1);
@@ -282,12 +310,18 @@ public class TargetHud extends HudElement implements ThemeManager.ThemeChangeLis
             }
         }
 
+        // Если прицела по сущности нет — сбрасываем таймер «закрыто стеной», чтобы не залипало.
+        if (mc.crosshairTarget == null || mc.crosshairTarget.getType() != HitResult.Type.ENTITY) {
+            occludedSinceMs = 0L;
+        }
+
         if (lastTarget != null && (!lastTarget.isAlive() || now - lastSeenTime > HUD_DURATION)) {
             lastTarget = null;
             forceFade = true;
         }
 
         boolean chatOpen = mc.currentScreen instanceof net.minecraft.client.gui.screen.ChatScreen;
+        boolean anyScreenOpen = mc.currentScreen != null;
         boolean previewMode = chatOpen && lastTarget == null;
         LivingEntity previewEntity = previewMode ? mc.player : null;
 
@@ -305,10 +339,6 @@ public class TargetHud extends HudElement implements ThemeManager.ThemeChangeLis
             return;
         }
 
-        float posX = getX();
-        float posY = getY();
-        setBounds(posX, posY, WIDTH, HEIGHT);
-
         int alpha = (int) (230 * fadeAnimation.getValue());
         if (alpha <= 0) return;
 
@@ -319,6 +349,34 @@ public class TargetHud extends HudElement implements ThemeManager.ThemeChangeLis
 
         LivingEntity target = lastTarget;
         if (!previewMode && target == null && lastKnownCenter == null) return;
+
+        float posX = getX();
+        float posY = getY();
+
+        // Follow mode: pin HUD near the target on screen (only in-game; pause while any GUI is open)
+        if (followTarget.getValue() && !anyScreenOpen && !previewMode && target != null) {
+            try {
+                Vec3d center = entityCenter(target, e);
+                Vec3d screen = WorldUtils.getPosition(center);
+                if (screen.z > 0) {
+                    float winW = mc.getWindow().getScaledWidth();
+                    float winH = mc.getWindow().getScaledHeight();
+                    float offX = 18f; // left of the player
+                    float offY = 0f;
+
+                    posX = (float) screen.x - WIDTH - offX;
+                    posY = (float) screen.y - (HEIGHT / 2f) + offY;
+
+                    // Clamp to screen
+                    float pad = 5f;
+                    posX = Math.max(pad, Math.min(posX, winW - WIDTH - pad));
+                    posY = Math.max(pad, Math.min(posY, winH - HEIGHT - pad));
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+
+        setBounds(posX, posY, WIDTH, HEIGHT);
 
         float rawHp = target != null ? MathUtils.round(Server.getHealth(target, false)) : (previewEntity != null ? MathUtils.round(Server.getHealth(previewEntity, false)) : 0f);
         float maxHp = target != null ? Math.max(1f, MathUtils.round(target.getMaxHealth())) : (previewEntity != null ? Math.max(1f, MathUtils.round(previewEntity.getMaxHealth())) : 20f);
@@ -436,7 +494,7 @@ public class TargetHud extends HudElement implements ThemeManager.ThemeChangeLis
             long hpDur2 = hpTargetPx2 < curHpPx2 ? 40L : 65L;
             float fillW = Math.max(0f, Math.min(barW2, hpAnimPx.animate(hpTargetPx2, hpDur2)));
                 Render2D.drawRoundedRect(e.getContext().getMatrices(), barX2, barY2, fillW, barH2, 5f,
-                    HudStyle.alphaCap(themeManager.getCurrentTheme().getAccentColor(), alpha));
+                    HudStyle.alphaCap(themeManager.getAccentColor(), alpha));
 
             // Percent text centered
             int percent = (int) Math.round(hp01 * 100.0);
@@ -522,6 +580,13 @@ public class TargetHud extends HudElement implements ThemeManager.ThemeChangeLis
         String nameDraw = ellipsize(name, 9f, maxNameW);
         Render2D.drawFont(e.getContext().getMatrices(), Fonts.BOLD.getFont(9f),
                 nameDraw, textX, textY, new Color(headerTextColor.getRed(), headerTextColor.getGreen(), headerTextColor.getBlue(), alpha));
+
+        // HP text (style 1 / default): makes it clear how much HP is left
+        String hpText = "HP: " + (int) Math.floor(rawHp);
+        float hpFs = 8f;
+        float hpY = textY + Fonts.BOLD.getHeight(9f) + 2f;
+        Render2D.drawFont(e.getContext().getMatrices(), Fonts.MEDIUM.getFont(hpFs), hpText, textX, hpY,
+            new Color(textColor.getRed(), textColor.getGreen(), textColor.getBlue(), Math.min(220, alpha)));
         float barY = posY + HEIGHT - 10f;
         float barW = (posX + WIDTH - 8f) - barX;
         float barH = 5.5f;
@@ -543,7 +608,7 @@ public class TargetHud extends HudElement implements ThemeManager.ThemeChangeLis
         prevHurtTime = 0;
 
         // Use live accent color from theme for gradient themes
-        Color liveAccent = theme.getAccentColor();
+        Color liveAccent = themeManager.getAccentColor();
         Render2D.drawRoundedRect(e.getContext().getMatrices(), barX, barY, hpPx, barH,
                 Math.min(2f, hpPx / 2f), liveAccent);
 
@@ -598,14 +663,14 @@ public class TargetHud extends HudElement implements ThemeManager.ThemeChangeLis
         float icon = 12f;
         float ix = x + 6f;
         float iy = y + (menuH - icon) / 2f;
-        Color accent = HudStyle.alphaCap(theme.getAccentColor(), alpha);
+        Color accent = HudStyle.alphaCap(themeManager.getAccentColor(), alpha);
         Render2D.drawTexture(e.getContext().getMatrices(), ix, iy, icon, icon, 0f, STAR_TEX, accent);
 
         String label = "Частицы";
         float fs = 7.5f;
         float tx = ix + icon + 6f;
         float ty = y + (menuH - Fonts.REGULAR.getHeight(fs)) / 2f + 0.25f;
-        Render2D.drawFont(e.getContext().getMatrices(), Fonts.REGULAR.getFont(fs), label, tx, ty, HudStyle.alphaCap(theme.getTextColor(), Math.min(220, alpha)));
+        Render2D.drawFont(e.getContext().getMatrices(), Fonts.REGULAR.getFont(fs), label, tx, ty, HudStyle.alphaCap(themeManager.getTextColor(), Math.min(220, alpha)));
 
         // Toggle button
         float btnW = 30f;
@@ -620,13 +685,13 @@ public class TargetHud extends HudElement implements ThemeManager.ThemeChangeLis
         boolean on = displayHudParticles.getValue();
         HudStyle.drawInset(e.getContext().getMatrices(), btnX, btnY, btnW, btnH, 6f, theme, Math.min(170, alpha));
         if (on) {
-            Render2D.drawRoundedRect(e.getContext().getMatrices(), btnX, btnY, btnW, btnH, 6f, HudStyle.alphaCap(theme.getAccentColor(), 80));
+            Render2D.drawRoundedRect(e.getContext().getMatrices(), btnX, btnY, btnW, btnH, 6f, HudStyle.alphaCap(themeManager.getAccentColor(), 80));
         }
         String st = on ? "ВКЛ" : "ВЫКЛ";
         float stW = Fonts.BOLD.getWidth(st, 7f);
         float stX = btnX + (btnW - stW) / 2f;
         float stY = btnY + (btnH - Fonts.BOLD.getHeight(7f)) / 2f + 0.25f;
-        Render2D.drawFont(e.getContext().getMatrices(), Fonts.BOLD.getFont(7f), st, stX, stY, HudStyle.alphaCap(theme.getTextColor(), Math.min(220, alpha)));
+        Render2D.drawFont(e.getContext().getMatrices(), Fonts.BOLD.getFont(7f), st, stX, stY, HudStyle.alphaCap(themeManager.getTextColor(), Math.min(220, alpha)));
     }
 
     // Trim text to fit maxWidth by appending "..." when necessary using the provided font size

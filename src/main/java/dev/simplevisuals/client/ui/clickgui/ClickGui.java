@@ -6,6 +6,7 @@ import dev.simplevisuals.client.util.animations.Animation;
 import dev.simplevisuals.client.util.animations.Easing;
 import dev.simplevisuals.client.util.renderer.Render2D;
 import dev.simplevisuals.client.util.renderer.fonts.Fonts;
+import dev.simplevisuals.client.ui.clickgui.render.ClickGuiDraw;
 import dev.simplevisuals.client.managers.ThemeManager; // Import ThemeManager
 import dev.simplevisuals.modules.api.Category;
 import dev.simplevisuals.modules.api.Module;
@@ -113,10 +114,39 @@ public class ClickGui extends Screen implements Wrapper {
         try {
             UI ui = NexusVisual.getInstance().getModuleManager().getModule(UI.class);
             if (ui != null && ui.clickGuiScale != null) {
-                return clamp(ui.clickGuiScale.getValue().floatValue(), 0.6f, 1.2f);
+                float requested = ui.clickGuiScale.getValue().floatValue();
+                // Keep scaling linear: layout size is stable, scale just zooms.
+                // Also clamp to the maximum scale that still fits on screen.
+                float sw = mc.getWindow().getScaledWidth();
+                float sh = mc.getWindow().getScaledHeight();
+                float baseW = Math.min(640f, Math.max(260f, sw - 40f));
+                float baseH = Math.min(360f, Math.max(180f, sh - 60f));
+                float fit = Math.min((sw - 40f) / Math.max(1f, baseW), (sh - 60f) / Math.max(1f, baseH));
+                float max = Math.min(1.2f, Math.max(0.6f, fit));
+
+                // Keep user range; readability is handled by font compensation below.
+                return clamp(requested, 0.6f, max);
             }
         } catch (Throwable ignored) {}
         return 1.0f;
+    }
+
+    private void drawFontScaled(DrawContext ctx, dev.simplevisuals.client.util.renderer.fonts.Instance font, String text, float x, float y, Color color) {
+        // When UI is scaled down, fonts become too small. We partially compensate reminding that scissor
+        // and hit-tests are still computed in unscaled coords.
+        float s = lastUiScale;
+        if (s >= 0.999f) {
+            Render2D.drawFont(ctx.getMatrices(), font, text, x, y, color);
+            return;
+        }
+
+        float inv = (float) (1.0 / Math.sqrt(Math.max(0.0001, s))); // net font scale becomes sqrt(s)
+        ctx.getMatrices().push();
+        ctx.getMatrices().translate(x, y, 0);
+        ctx.getMatrices().scale(inv, inv, 1f);
+        ctx.getMatrices().translate(-x, -y, 0);
+        Render2D.drawFont(ctx.getMatrices(), font, text, x, y, color);
+        ctx.getMatrices().pop();
     }
 
     private double[] unscaleMouse(double mouseX, double mouseY) {
@@ -142,26 +172,26 @@ public class ClickGui extends Screen implements Wrapper {
         scrollYTarget = 0f;
         tabScrollY = 0f;
 
-        // Keep ClickGUI light/dark visuals in sync with the currently selected theme
-        guiLightMode = isLightTheme(themeManager.getCurrentTheme());
+        // Keep ClickGUI light/dark visuals in sync with effective colors
+        Color bg = themeManager.getBackgroundColor();
+        if (bg != null) {
+            double l = (0.2126 * bg.getRed() + 0.7152 * bg.getGreen() + 0.0722 * bg.getBlue()) / 255.0;
+            guiLightMode = l > 0.55;
+        } else {
+            guiLightMode = isLightTheme(themeManager.getCurrentTheme());
+        }
 
         closing = false;
         yAnimation.update(true); // Animation for opening (fade)
     }
 
     private void updateLayoutForScale(float uiScale) {
-        float s = (uiScale <= 0f ? 1f : uiScale);
         float sw = mc.getWindow().getScaledWidth();
         float sh = mc.getWindow().getScaledHeight();
 
-        // Чтобы итоговый (отмасштабированный) ClickGUI помещался на экране.
-        float maxW = (sw - 40f) / s;
-        float maxH = (sh - 60f) / s;
-        this.width = Math.min(640f, Math.max(260f, maxW));
-        this.height = Math.min(360f, Math.max(180f, maxH));
-
-        this.x = (sw - this.width) / 2f;
-        this.y = (sh - this.height) / 2f;
+        // Layout size should not depend on scale (scale is applied via matrices).
+        this.width = Math.min(640f, Math.max(260f, sw - 40f));
+        this.height = Math.min(360f, Math.max(180f, sh - 60f));
 
         lastLayoutScale = uiScale;
     }
@@ -340,30 +370,27 @@ public class ClickGui extends Screen implements Wrapper {
         uiAlpha = Math.max(0f, Math.min(1f, yAnimation.getValue()));
         contentOffsetY = (1f - uiAlpha) * 8f;
 
-        // ClickGUI не зависит от тем — фиксированная палитра
         int alpha = (int) (255 * uiAlpha);
-        Color panel = guiLightMode
-            ? new Color(248, 248, 248, alpha)
-            : new Color(16, 16, 18, alpha);
-        Color inner = guiLightMode
-            ? new Color(255, 255, 255, (int) (alpha * 0.96f))
-            : new Color(24, 24, 28, (int) (alpha * 0.96f));
+        // Modern glassmorphism-inspired design
+        float r = 16f;
+        Color panelBg = guiLightMode
+            ? new Color(255, 255, 255, (int) (240 * uiAlpha))
+            : new Color(18, 18, 24, (int) (245 * uiAlpha));
+        // Very subtle border
         Color border = guiLightMode
-            ? new Color(170, 170, 175, (int) (140 * uiAlpha))
-            : new Color(78, 78, 86, (int) (140 * uiAlpha));
+            ? new Color(0, 0, 0, (int) (25 * uiAlpha))
+            : new Color(255, 255, 255, (int) (18 * uiAlpha));
 
-        Render2D.drawRoundedRect(context.getMatrices(), x, y, width, height, 10f, panel);
-        Render2D.drawRoundedRect(context.getMatrices(), x + 1f, y + 1f, width - 2f, height - 2f, 9f, inner);
-        Render2D.drawBorder(context.getMatrices(), x, y, width, height, 10f, 0.6f, 0.6f, border);
+        Render2D.drawRoundedRect(context.getMatrices(), x, y, width, height, r, panelBg);
+        Render2D.drawBorder(context.getMatrices(), x, y, width, height, r, 1f, 1f, border);
 
         renderHeader(context);
-        renderCategories(context);
+        renderCategories(context, mx, my);
         renderTopDescription(context);
         renderModulesArea(context, mx, my, delta);
         renderBottomHints(context);
 
-        // Draw last so it's always fully visible above ClickGUI content
-        renderRgbGarlandBorder(context);
+        // RGB garland border disabled for a cleaner modern look
 
         context.getMatrices().pop();
     }
@@ -454,44 +481,37 @@ public class ClickGui extends Screen implements Wrapper {
         if (uiAlpha <= 0f) return;
 
         float headerH = HEADER_H;
-        Color header = guiLightMode
-            ? new Color(252, 252, 252, (int) (255 * uiAlpha))
-            : new Color(20, 20, 24, (int) (255 * uiAlpha));
         Color txt = guiLightMode
-            ? new Color(25, 25, 25, (int) (245 * uiAlpha))
-            : new Color(235, 235, 235, (int) (245 * uiAlpha));
+            ? new Color(30, 30, 35, (int) (255 * uiAlpha))
+            : new Color(245, 245, 250, (int) (255 * uiAlpha));
 
-        // Header bar must follow the same content offset as title/tabs, otherwise it looks misaligned
-        float headerY = y + 1f + contentOffsetY;
-        // Radius order is: top-left, bottom-left, bottom-right, top-right
-        Render2D.drawRoundedRect2(ctx.getMatrices(), x + 1f, headerY, width - 2f, headerH, 9f, 0f, 0f, 9f, header);
+        // Minimal header - just title, no background bar
+        float headerY = y + contentOffsetY;
+        
+        // Subtle gradient line under header
+        Color accent = ThemeManager.getInstance().getAccentColor();
+        Color lineColor = new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), (int) (80 * uiAlpha));
+        Render2D.drawRoundedRect(ctx.getMatrices(), x + 20f, headerY + headerH - 1f, width - 40f, 2f, 1f, lineColor);
 
         String title = "Nexus Visual";
-        float fs = 9.5f;
-        float maxW = width - 44f; // место под переключатель
+        float fs = 10f;
+        float maxW = width - 44f;
         while (fs > 7.5f && Fonts.MEDIUM.getWidth(title, fs) > maxW) fs -= 0.5f;
         float w = Fonts.MEDIUM.getWidth(title, fs);
         float tx = x + (width - w) / 2f;
-        // Заголовок держим выше табов
-        float ty = y + 7f + contentOffsetY;
-        Render2D.drawFont(ctx.getMatrices(), Fonts.MEDIUM.getFont(fs), title, tx, ty, txt);
+        float ty = y + 8f + contentOffsetY;
+        drawFontScaled(ctx, Fonts.MEDIUM.getFont(fs), title, tx, ty, txt);
 
-        // Theme toggle button (sun/moon icon)
-        themeToggleS = 16f;
-        themeToggleX = x + width - themeToggleS - 10f;
-        themeToggleY = y + 7f + contentOffsetY;
+        // Theme toggle button - modern circle
+        themeToggleS = 18f;
+        themeToggleX = x + width - themeToggleS - 12f;
+        themeToggleY = y + 6f + contentOffsetY;
 
         Color btnBg = guiLightMode
-            ? new Color(235, 235, 235, (int) (255 * uiAlpha))
-            : new Color(30, 30, 30, (int) (255 * uiAlpha));
-        Color btnBorder = guiLightMode
-            ? new Color(185, 185, 185, (int) (160 * uiAlpha))
-            : new Color(80, 80, 80, (int) (160 * uiAlpha));
-        // круглая кнопка — чтобы не было "квадрата" в правом верхнем углу
+            ? new Color(240, 240, 245, (int) (255 * uiAlpha))
+            : new Color(35, 35, 42, (int) (255 * uiAlpha));
         float btnR = themeToggleS / 2f;
         Render2D.drawRoundedRect(ctx.getMatrices(), themeToggleX, themeToggleY, themeToggleS, themeToggleS, btnR, btnBg);
-        Render2D.drawBorder(ctx.getMatrices(), themeToggleX, themeToggleY, themeToggleS, themeToggleS, btnR,
-            0.6f, 0.6f, btnBorder);
 
         if (guiLightMode) drawSunIcon(ctx);
         else drawMoonIcon(ctx);
@@ -501,22 +521,16 @@ public class ClickGui extends Screen implements Wrapper {
         float cx = themeToggleX + themeToggleS / 2f;
         float cy = themeToggleY + themeToggleS / 2f;
 
-        float r = 3.4f;
-        Color glow = new Color(255, 190, 60, (int) (55 * uiAlpha));
-        Color c = new Color(255, 190, 60, (int) (245 * uiAlpha));
+        float r = 3.2f;
+        Color c = new Color(255, 190, 60, (int) (235 * uiAlpha));
 
-        // soft glow
-        Render2D.drawRoundedRect(ctx.getMatrices(), cx - (r + 2.2f), cy - (r + 2.2f), (r + 2.2f) * 2f, (r + 2.2f) * 2f, r + 2.2f, glow);
-        // core
+        // flat core
         Render2D.drawRoundedRect(ctx.getMatrices(), cx - r, cy - r, r * 2f, r * 2f, r, c);
-        // small highlight
-        Render2D.drawRoundedRect(ctx.getMatrices(), cx - 1.2f, cy - 1.8f, 1.6f, 1.6f, 0.8f,
-                new Color(255, 235, 170, (int) (160 * uiAlpha)));
 
         // rays (8 directions)
-        float rayOuter = 6.4f;
-        float rayInner = r + 1.4f;
-        float w = 1.15f;
+        float rayOuter = 6.0f;
+        float rayInner = r + 1.6f;
+        float w = 1.0f;
         for (int i = 0; i < 8; i++) {
             double ang = (Math.PI / 4.0) * i;
             float ox = (float) Math.cos(ang);
@@ -534,7 +548,7 @@ public class ClickGui extends Screen implements Wrapper {
         float cy = themeToggleY + themeToggleS / 2f;
         float r = 4.4f;
 
-        Color moon = new Color(220, 220, 240, (int) (245 * uiAlpha));
+        Color moon = new Color(220, 220, 240, (int) (235 * uiAlpha));
         Color cut = guiLightMode
                 ? new Color(235, 235, 235, (int) (255 * uiAlpha))
                 : new Color(30, 30, 30, (int) (255 * uiAlpha));
@@ -543,10 +557,7 @@ public class ClickGui extends Screen implements Wrapper {
         Render2D.drawRoundedRect(ctx.getMatrices(), cx - r, cy - r, r * 2f, r * 2f, r, moon);
         // cut-out for crescent
         Render2D.drawRoundedRect(ctx.getMatrices(), cx - r + 2.3f, cy - r + 0.4f, r * 2f, r * 2f, r, cut);
-        // tiny stars
-        Color star = new Color(255, 225, 140, (int) (210 * uiAlpha));
-        Render2D.drawRoundedRect(ctx.getMatrices(), cx + 2.7f, cy - 3.0f, 1.2f, 1.2f, 0.6f, star);
-        Render2D.drawRoundedRect(ctx.getMatrices(), cx - 3.3f, cy + 2.0f, 0.9f, 0.9f, 0.45f, star);
+        // no stars/glow for minimal look
     }
 
     private void renderBottomHints(DrawContext ctx) {
@@ -571,24 +582,24 @@ public class ClickGui extends Screen implements Wrapper {
         // line 1
         float w1 = Fonts.MEDIUM.getWidth(hint1, fontSize);
         float x1 = screenCenterX - w1 / 2f;
-        Render2D.drawFont(ctx.getMatrices(), Fonts.MEDIUM.getFont(fontSize), hint1, x1, startY, textColor);
+        drawFontScaled(ctx, Fonts.MEDIUM.getFont(fontSize), hint1, x1, startY, textColor);
 
         // line 2
         float w2 = Fonts.MEDIUM.getWidth(hint2, fontSize);
         float x2 = screenCenterX - w2 / 2f;
-        Render2D.drawFont(ctx.getMatrices(), Fonts.MEDIUM.getFont(fontSize), hint2, x2, startY + lineHeight, textColor);
+        drawFontScaled(ctx, Fonts.MEDIUM.getFont(fontSize), hint2, x2, startY + lineHeight, textColor);
 
         // line 3
         float w3 = Fonts.MEDIUM.getWidth(hint3, fontSize);
         float x3 = screenCenterX - w3 / 2f;
-        Render2D.drawFont(ctx.getMatrices(), Fonts.MEDIUM.getFont(fontSize), hint3, x3, startY + lineHeight * 2f, textColor);
+        drawFontScaled(ctx, Fonts.MEDIUM.getFont(fontSize), hint3, x3, startY + lineHeight * 2f, textColor);
     }
 
     private void renderPanelGlow(DrawContext ctx) {
         // Blur удалён
     }
 
-    private void renderCategories(DrawContext ctx) {
+    private void renderCategories(DrawContext ctx, int mouseX, int mouseY) {
         // Left vertical sidebar categories (landscape layout)
         float sidebarX = x + 8f;
         float sidebarY = y + HEADER_H + 10f + contentOffsetY;
@@ -596,12 +607,16 @@ public class ClickGui extends Screen implements Wrapper {
         float sidebarH = height - (sidebarY - y) - 10f;
 
         int a = (int) (220 * uiAlpha);
-        Color bg = guiLightMode ? new Color(252, 252, 252, a) : new Color(20, 20, 24, a);
+        Color accent = themeManager.getAccentColor();
+        if (accent == null) accent = new Color(140, 140, 140);
+
+        // Modern minimal sidebar - no background, cleaner look
         Color border = guiLightMode
-            ? new Color(210, 210, 215, (int) (110 * uiAlpha))
-            : new Color(90, 90, 100, (int) (110 * uiAlpha));
-        Render2D.drawRoundedRect(ctx.getMatrices(), sidebarX, sidebarY, sidebarW, sidebarH, 8f, bg);
-        Render2D.drawBorder(ctx.getMatrices(), sidebarX, sidebarY, sidebarW, sidebarH, 8f, 0.6f, 0.6f, border);
+            ? new Color(0, 0, 0, (int) (15 * uiAlpha))
+            : new Color(255, 255, 255, (int) (12 * uiAlpha));
+        float rr = 12f;
+        // Just a subtle separator line instead of full border
+        Render2D.drawRect(ctx.getMatrices(), sidebarX + sidebarW - 1f, sidebarY + 8f, 1f, sidebarH - 16f, border);
 
         float itemX = sidebarX + SIDEBAR_PAD;
         float itemY = sidebarY + SIDEBAR_PAD;
@@ -609,23 +624,40 @@ public class ClickGui extends Screen implements Wrapper {
 
         for (Category cat : TABS) {
             boolean active = cat == selectedCategory;
-            boolean hovered = false; // hover visuals are optional here
+            boolean hovered = mouseX >= itemX && mouseX <= itemX + itemW && mouseY >= itemY && mouseY <= itemY + SIDEBAR_ITEM_H;
             int ia = (int) (255 * uiAlpha);
 
-            Color itemBg = active
-                    ? (guiLightMode ? new Color(238, 238, 240, ia) : new Color(34, 34, 40, ia))
-                    : (guiLightMode ? new Color(255, 255, 255, (int) (120 * uiAlpha)) : new Color(16, 16, 18, (int) (120 * uiAlpha)));
-            if (hovered) {
-                itemBg = guiLightMode ? new Color(242, 242, 244, ia) : new Color(28, 28, 34, ia);
+            // Modern pill-style tabs
+            Color itemBg;
+            if (active) {
+                itemBg = new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), (int) (45 * uiAlpha));
+            } else if (hovered) {
+                itemBg = guiLightMode ? new Color(0, 0, 0, (int) (15 * uiAlpha)) : new Color(255, 255, 255, (int) (15 * uiAlpha));
+            } else {
+                itemBg = new Color(0, 0, 0, 0); // transparent
             }
-            Render2D.drawRoundedRect(ctx.getMatrices(), itemX, itemY, itemW, SIDEBAR_ITEM_H, 7f, itemBg);
 
+            float itemR = 8f;
+            if (itemBg.getAlpha() > 0) {
+                Render2D.drawRoundedRect(ctx.getMatrices(), itemX, itemY, itemW, SIDEBAR_ITEM_H, itemR, itemBg);
+            }
+
+            // Beautiful outline for active tab (no shadows)
+            if (active) {
+                Color outer = new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), (int) (150 * uiAlpha));
+                Color inner = guiLightMode
+                    ? new Color(255, 255, 255, (int) (90 * uiAlpha))
+                    : new Color(0, 0, 0, (int) (85 * uiAlpha));
+                Render2D.drawBorder(ctx.getMatrices(), itemX, itemY, itemW, SIDEBAR_ITEM_H, itemR, 1f, 1f, outer);
+                Render2D.drawBorder(ctx.getMatrices(), itemX + 1f, itemY + 1f, itemW - 2f, SIDEBAR_ITEM_H - 2f, itemR - 1f, 1f, 1f, inner);
+            }
+            
             Color text = active
                     ? (guiLightMode ? new Color(25, 25, 25, ia) : new Color(235, 235, 235, ia))
                     : (guiLightMode ? new Color(90, 90, 90, ia) : new Color(170, 170, 170, ia));
             String name = cat.name();
             float ty = itemY + (SIDEBAR_ITEM_H - Fonts.MEDIUM.getHeight(9f)) / 2f + 1f;
-            Render2D.drawFont(ctx.getMatrices(), Fonts.MEDIUM.getFont(9f), name, itemX + 10f, ty, text);
+            drawFontScaled(ctx, Fonts.MEDIUM.getFont(9f), name, itemX + 10f, ty, text);
 
             itemY += SIDEBAR_ITEM_H + SIDEBAR_GAP;
         }
@@ -651,7 +683,7 @@ public class ClickGui extends Screen implements Wrapper {
         int panelAlpha = (int) (120 * uiAlpha);
         int textAlpha = (int) (255 * uiAlpha);
 
-        Render2D.drawFont(ctx.getMatrices(), Fonts.MEDIUM.getFont(9f), descText, textX, textY,
+        drawFontScaled(ctx, Fonts.MEDIUM.getFont(9f), descText, textX, textY,
             guiLightMode
                 ? new Color(20, 20, 20, textAlpha)
                 : new Color(255, 255, 255, textAlpha));
@@ -659,6 +691,8 @@ public class ClickGui extends Screen implements Wrapper {
     }
 
     private void startScissorScaled(DrawContext ctx, float rx, float ry, float rw, float rh) {
+        // Flush batched UI before changing scissor state to keep correct clipping/order.
+        ClickGuiDraw.flush();
         float s = lastUiScale;
         if (s == 1.0f) {
             Render2D.startScissor(ctx, rx, ry, rw, rh);
@@ -671,6 +705,17 @@ public class ClickGui extends Screen implements Wrapper {
         float sw = rw * s;
         float sh = rh * s;
         Render2D.startScissor(ctx, sx, sy, sw, sh);
+    }
+
+    // Exposed for ClickGUI components that need scale-aware clipping.
+    public void startScissorScaledPublic(DrawContext ctx, float rx, float ry, float rw, float rh) {
+        startScissorScaled(ctx, rx, ry, rw, rh);
+    }
+
+    public void stopScissorPublic(DrawContext ctx) {
+        // Flush inside scissor before disabling it.
+        ClickGuiDraw.flush();
+        Render2D.stopScissor(ctx);
     }
 
     private void renderModulesArea(DrawContext ctx, int mouseX, int mouseY, float delta) {
@@ -719,7 +764,7 @@ public class ClickGui extends Screen implements Wrapper {
                 ? (guiLightMode ? new Color(245, 245, 245, createCardA) : new Color(34, 34, 34, createCardA))
                 : (guiLightMode ? new Color(235, 235, 235, createCardA) : new Color(24, 24, 24, createCardA));
             Render2D.drawRoundedRect(ctx.getMatrices(), modulesX, themeY, cardW, itemH, 6f, createBg);
-            Render2D.drawFont(ctx.getMatrices(), Fonts.MEDIUM.getFont(9f), "+ Custom Theme", modulesX + 10f, themeY + 9f,
+            drawFontScaled(ctx, Fonts.MEDIUM.getFont(9f), "+ Custom Theme", modulesX + 10f, themeY + 9f,
                 guiLightMode
                     ? new Color(25, 25, 25, (int) (245 * uiAlpha))
                     : new Color(235, 235, 235, (int) (245 * uiAlpha)));
@@ -737,18 +782,11 @@ public class ClickGui extends Screen implements Wrapper {
                 : (guiLightMode ? new Color(235, 235, 235, cardA) : new Color(24, 24, 24, cardA));
             Render2D.drawRoundedRect(ctx.getMatrices(), modulesX, themeY, cardW, itemH, 6f, cardBg);
 
-            // Акцентная полоска слева (выбранная тема)
-            if (isCurrent) {
-                Color acc = theme.getAccentColor();
-                Render2D.drawRoundedRect(ctx.getMatrices(), modulesX + 2f, themeY + 2f, 3f, itemH - 4f, 2f,
-                    new Color(acc.getRed(), acc.getGreen(), acc.getBlue(), (int) (220 * uiAlpha)));
-            }
-
             // Название
             Color nameColor = isCurrent
                 ? (guiLightMode ? new Color(25, 25, 25, (int) (255 * uiAlpha)) : new Color(255, 255, 255, (int) (255 * uiAlpha)))
                 : (guiLightMode ? new Color(70, 70, 70, (int) (240 * uiAlpha)) : new Color(210, 210, 210, (int) (240 * uiAlpha)));
-            Render2D.drawFont(ctx.getMatrices(), Fonts.MEDIUM.getFont(9f),
+            drawFontScaled(ctx, Fonts.MEDIUM.getFont(9f),
                 theme.getName(), modulesX + 10f, themeY + 9f, nameColor);
 
             // Превью (градиент bg -> secondary)
@@ -797,6 +835,9 @@ public class ClickGui extends Screen implements Wrapper {
             Arrays.fill(baseY, modulesY + 2f);
             float maxBottom = modulesY;
             int placed = 0;
+
+            // Batched pass for module cards (ModuleComponent is already migrated to ClickGuiDraw).
+            ClickGuiDraw.begin(ctx);
             for (ModuleComponent mcComp : comps) {
                 int col = placed % cols;
                 float cx = modulesX + col * (colW + gap);
@@ -816,6 +857,7 @@ public class ClickGui extends Screen implements Wrapper {
                 maxBottom = Math.max(maxBottom, baseY[col]);
                 placed++;
             }
+            ClickGuiDraw.end();
             float contentBottom = modulesY + modulesH;
             maxScroll = Math.max(0f, (maxBottom - gap) - contentBottom);
             scrollYTarget = clamp(scrollYTarget, 0f, maxScroll);
@@ -837,24 +879,31 @@ public class ClickGui extends Screen implements Wrapper {
 
         // Scrollbar for modules/themes list when content overflows (rendered to the right of ClickGUI)
         if (maxScroll > 0.5f) {
-            float trackX = modulesX + modulesW - 3f;
+            float trackX = modulesX + modulesW - 3.5f;
             float trackY = modulesY;
-            float trackW = 2f;
+            float trackW = 3f;
             float trackH = modulesH;
-            Render2D.drawRect(ctx.getMatrices(), trackX, trackY, trackW, trackH,
-                    guiLightMode
-                        ? new Color(0, 0, 0, Math.min(40, (int) (40f * uiAlpha)))
-                        : new Color(0, 0, 0, Math.min(90, (int) (90f * uiAlpha))));
+
+            boolean hoverScroll = mouseX >= trackX - 6f && mouseX <= trackX + trackW + 6f && mouseY >= trackY && mouseY <= trackY + trackH;
+            int trackA = (int) ((hoverScroll ? 40f : 26f) * uiAlpha);
+            Color trackCol = guiLightMode
+                ? new Color(0, 0, 0, trackA)
+                : new Color(255, 255, 255, (int) ((hoverScroll ? 26f : 16f) * uiAlpha));
+
+            // Slim track
+            Render2D.drawRoundedRect(ctx.getMatrices(), trackX + 1f, trackY + 6f, 1f, trackH - 12f, 0.5f, trackCol);
 
             float visibleRatio = modulesH / Math.max(modulesH + maxScroll, 1f);
             float thumbH = Math.max(14f, trackH * visibleRatio);
             float maxThumbTravel = trackH - thumbH;
             float scrollRatio = maxScroll <= 0f ? 0f : (scrollY / maxScroll);
             float thumbY = trackY + maxThumbTravel * scrollRatio;
-                Color thumbColor = guiLightMode
-                    ? new Color(40, 40, 40, Math.min(160, (int) (160f * uiAlpha)))
-                    : new Color(200, 200, 200, Math.min(160, (int) (160f * uiAlpha)));
-            Render2D.drawRoundedRect(ctx.getMatrices(), trackX - 0.5f, thumbY, trackW + 1f, thumbH, 1.5f, thumbColor);
+                Color accent = themeManager.getAccentColor();
+                if (accent == null) accent = new Color(140, 140, 140);
+
+                int thumbA = (int) ((hoverScroll ? 210f : 175f) * uiAlpha);
+                Color thumbColor = new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), Math.min(235, thumbA));
+            Render2D.drawRoundedRect(ctx.getMatrices(), trackX, thumbY, trackW, thumbH, trackW / 2f, thumbColor);
         }
 
         if (anim > 0.01f) {
@@ -887,8 +936,11 @@ public class ClickGui extends Screen implements Wrapper {
             float total = 0f;
             if (hasSettings) {
                 target.setGlobalAlpha(Math.min(1f, anim * uiAlpha));
+                // Batched pass for settings components (settings component impls are migrated to ClickGuiDraw).
+                ClickGuiDraw.begin(ctx);
                 total = target.renderSettingsExternally(ctx, rContentX, rContentY, rContentW,
                         rContentX, rContentY, rContentW, rContentH, mouseX, mouseY, delta, settingsScrollY);
+                ClickGuiDraw.end();
             }
             settingsMaxScroll = Math.max(0f, total - rContentH);
             scrollYTarget = clamp(scrollYTarget, 0f, maxScroll);
@@ -901,24 +953,31 @@ public class ClickGui extends Screen implements Wrapper {
 
             // vertical scrollbar on the right of settings content
             if (settingsMaxScroll > 0.5f) {
-                float trackX = drawPanelX + panelW - 3f;
+                float trackX = drawPanelX + panelW - 3.5f;
                 float trackY = rContentY;
-                float trackW = 2f;
+                float trackW = 3f;
                 float trackH = rContentH;
-                Render2D.drawRect(ctx.getMatrices(), trackX, trackY, trackW, trackH,
-                    guiLightMode
-                        ? new Color(0, 0, 0, Math.min(40, (int) (40f * anim * uiAlpha)))
-                        : new Color(0, 0, 0, Math.min(90, (int) (90f * anim * uiAlpha))));
+
+                boolean hoverScroll = mouseX >= trackX - 6f && mouseX <= trackX + trackW + 6f && mouseY >= trackY && mouseY <= trackY + trackH;
+                int trackA = (int) ((hoverScroll ? 40f : 26f) * anim * uiAlpha);
+                Color trackCol = guiLightMode
+                    ? new Color(0, 0, 0, trackA)
+                    : new Color(255, 255, 255, (int) ((hoverScroll ? 26f : 16f) * anim * uiAlpha));
+
+                // Slim track
+                Render2D.drawRoundedRect(ctx.getMatrices(), trackX + 1f, trackY + 6f, 1f, trackH - 12f, 0.5f, trackCol);
 
                 float visibleRatio = rContentH / Math.max(rContentH + settingsMaxScroll, 1f);
                 float thumbH = Math.max(14f, trackH * visibleRatio);
                 float maxThumbTravel = trackH - thumbH;
                 float scrollRatio = settingsMaxScroll <= 0f ? 0f : (settingsScrollY / settingsMaxScroll);
                 float thumbY = trackY + maxThumbTravel * scrollRatio;
-                Color thumbColor = guiLightMode
-                    ? new Color(40, 40, 40, Math.min(160, (int) (160f * anim * uiAlpha)))
-                    : new Color(200, 200, 200, Math.min(160, (int) (160f * anim * uiAlpha)));
-                Render2D.drawRoundedRect(ctx.getMatrices(), trackX - 0.5f, thumbY, trackW + 1f, thumbH, 1.5f, thumbColor);
+                Color accent = themeManager.getAccentColor();
+                if (accent == null) accent = new Color(140, 140, 140);
+
+                int thumbA = (int) ((hoverScroll ? 210f : 175f) * anim * uiAlpha);
+                Color thumbColor = new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), Math.min(235, thumbA));
+                Render2D.drawRoundedRect(ctx.getMatrices(), trackX, thumbY, trackW, thumbH, trackW / 2f, thumbColor);
             }
 
             // Мягкий скруглённый оверлей над содержимым (снижаем альфу и убираем жёсткие края) с плавной кривой
@@ -954,7 +1013,7 @@ public class ClickGui extends Screen implements Wrapper {
             float py = panelY + 10f;
             Color label = guiLightMode ? new Color(40, 40, 40, (int) (240 * uiAlpha)) : new Color(220, 220, 220, (int) (240 * uiAlpha));
 
-            Render2D.drawFont(ctx.getMatrices(), Fonts.MEDIUM.getFont(9f), "Custom Theme", px, py, label);
+            drawFontScaled(ctx, Fonts.MEDIUM.getFont(9f), "Custom Theme", px, py, label);
 
                 // Delete button (custom themes only)
                 float delW = 54f;
@@ -970,12 +1029,12 @@ public class ClickGui extends Screen implements Wrapper {
                 float delTextW = Fonts.MEDIUM.getWidth(delText, delFont);
                 float delTextX = delX + (delW - delTextW) / 2f;
                 float delTextY = delY + (delH - delFont) / 2f + 0.5f;
-                Render2D.drawFont(ctx.getMatrices(), Fonts.MEDIUM.getFont(delFont), delText, delTextX, delTextY,
+                drawFontScaled(ctx, Fonts.MEDIUM.getFont(delFont), delText, delTextX, delTextY,
                     guiLightMode ? new Color(25, 25, 25, (int) (240 * uiAlpha)) : new Color(235, 235, 235, (int) (240 * uiAlpha)));
             py += 16f;
 
             // Name input
-            Render2D.drawFont(ctx.getMatrices(), Fonts.MEDIUM.getFont(8f), "Name", px, py, guiLightMode ? new Color(60, 60, 60, (int) (235 * uiAlpha)) : new Color(210, 210, 210, (int) (235 * uiAlpha)));
+            drawFontScaled(ctx, Fonts.MEDIUM.getFont(8f), "Name", px, py, guiLightMode ? new Color(60, 60, 60, (int) (235 * uiAlpha)) : new Color(210, 210, 210, (int) (235 * uiAlpha)));
             py += 12f;
             float nameW = panelW - 20f;
             float nameH = 18f;
@@ -985,27 +1044,30 @@ public class ClickGui extends Screen implements Wrapper {
                 Render2D.drawBorder(ctx.getMatrices(), px, py, nameW, nameH, 4f, 0.6f, 0.6f, nameBorder);
             String shown = themeNameEditing ? themeNameBuffer : (ct.getName() == null ? "" : ct.getName());
             if (shown.length() > 22) shown = shown.substring(0, 22);
-            Render2D.drawFont(ctx.getMatrices(), Fonts.MEDIUM.getFont(8f), shown, px + 6f, py + 5f,
+                drawFontScaled(ctx, Fonts.MEDIUM.getFont(8f), shown, px + 6f, py + 5f,
                     guiLightMode ? new Color(25, 25, 25, (int) (245 * uiAlpha)) : new Color(235, 235, 235, (int) (245 * uiAlpha)));
             py += nameH + 10f;
 
-                // Target buttons (BG / SEC / ACC)
-                float btnW = (panelW - 20f - 8f) / 3f;
-                float btnH = 18f;
-                String[] btnNames = {"BG", "SEC", "ACC"};
-                for (int i = 0; i < 3; i++) {
-                float bx = px + i * (btnW + 4f);
-                boolean sel = themeColorTarget == i;
-                Color bg = sel
-                    ? (guiLightMode ? new Color(225, 225, 225, (int) (240 * uiAlpha)) : new Color(45, 45, 45, (int) (240 * uiAlpha)))
-                    : (guiLightMode ? new Color(235, 235, 235, (int) (210 * uiAlpha)) : new Color(25, 25, 25, (int) (210 * uiAlpha)));
-                Render2D.drawRoundedRect(ctx.getMatrices(), bx, py, btnW, btnH, 4f, bg);
-                Render2D.drawFont(ctx.getMatrices(), Fonts.MEDIUM.getFont(8f), btnNames[i], bx + btnW / 2f - 7f, py + 5f,
-                    guiLightMode
-                        ? new Color(25, 25, 25, (int) (240 * uiAlpha))
-                        : new Color(235, 235, 235, (int) (240 * uiAlpha)));
-                }
-                py += btnH + 10f;
+                // Target button (single square): cycles BG / SEC / ACC
+                float btnS = 18f;
+                float bx = px + (panelW - 20f - btnS) / 2f;
+                float by = py;
+                Color bb = guiLightMode ? new Color(235, 235, 235, (int) (210 * uiAlpha)) : new Color(25, 25, 25, (int) (210 * uiAlpha));
+                Color bbSel = guiLightMode ? new Color(225, 225, 225, (int) (240 * uiAlpha)) : new Color(45, 45, 45, (int) (240 * uiAlpha));
+                Render2D.drawRoundedRect(ctx.getMatrices(), bx, by, btnS, btnS, 4f, bbSel);
+                Render2D.drawBorder(ctx.getMatrices(), bx, by, btnS, btnS, 4f, 0.6f, 0.6f,
+                    guiLightMode ? new Color(0, 0, 0, (int) (30 * uiAlpha)) : new Color(255, 255, 255, (int) (25 * uiAlpha)));
+
+                String targetLabel = themeColorTarget == 1 ? "SC" : (themeColorTarget == 2 ? "AC" : "BG");
+                float tf = 7f;
+                float tw = Fonts.MEDIUM.getWidth(targetLabel, tf);
+                float th = Fonts.MEDIUM.getHeight(tf);
+                drawFontScaled(ctx, Fonts.MEDIUM.getFont(tf), targetLabel,
+                    bx + (btnS - tw) / 2f,
+                    by + (btnS - th) / 2f + 0.25f,
+                    guiLightMode ? new Color(25, 25, 25, (int) (240 * uiAlpha)) : new Color(235, 235, 235, (int) (240 * uiAlpha)));
+
+                py += btnS + 10f;
 
                 // Color wheel
                 ensureColorWheelTexture();
@@ -1043,7 +1105,7 @@ public class ClickGui extends Screen implements Wrapper {
                 Color cur = getTargetColor(ct);
                 int alphaV = cur.getAlpha();
                 Color alphaLabel = guiLightMode ? new Color(60, 60, 60, (int) (235 * uiAlpha)) : new Color(210, 210, 210, (int) (235 * uiAlpha));
-                Render2D.drawFont(ctx.getMatrices(), Fonts.MEDIUM.getFont(8f), "Alpha: " + alphaV, px, alphaBlockY, alphaLabel);
+                drawFontScaled(ctx, Fonts.MEDIUM.getFont(8f), "Alpha: " + alphaV, px, alphaBlockY, alphaLabel);
 
                 float trackX = px;
                 float trackY = alphaBlockY + 10f;
@@ -1064,7 +1126,7 @@ public class ClickGui extends Screen implements Wrapper {
 
     private float renderRgbGroup(DrawContext ctx, float x, float y, float w, String name, Color color, int keyBase) {
         Color label = guiLightMode ? new Color(60, 60, 60, (int) (235 * uiAlpha)) : new Color(210, 210, 210, (int) (235 * uiAlpha));
-        Render2D.drawFont(ctx.getMatrices(), Fonts.MEDIUM.getFont(8f), name, x, y, label);
+        drawFontScaled(ctx, Fonts.MEDIUM.getFont(8f), name, x, y, label);
         y += 12f;
 
         y = renderRgbSlider(ctx, x, y, w, "R", color.getRed(), keyBase + 0, new Color(255, 90, 90, (int) (180 * uiAlpha)));
@@ -1075,7 +1137,7 @@ public class ClickGui extends Screen implements Wrapper {
 
     private float renderRgbSlider(DrawContext ctx, float x, float y, float w, String ch, int value, int key, Color fill) {
         Color text = guiLightMode ? new Color(70, 70, 70, (int) (235 * uiAlpha)) : new Color(190, 190, 190, (int) (235 * uiAlpha));
-        Render2D.drawFont(ctx.getMatrices(), Fonts.MEDIUM.getFont(8f), ch + ": " + value, x, y, text);
+        drawFontScaled(ctx, Fonts.MEDIUM.getFont(8f), ch + ": " + value, x, y, text);
 
         float trackX = x;
         float trackY = y + 10f;
@@ -1216,24 +1278,20 @@ public class ClickGui extends Screen implements Wrapper {
 
                 // Create custom theme (first card)
                 if (button == 0 && mouseX >= modulesX && mouseX <= modulesX + modulesW && mouseY >= themeY && mouseY <= themeY + itemH) {
-                    // generate a unique name
                     int idx = themeManager.getCustomThemes().size() + 1;
                     ThemeManager.Theme base = themeManager.getCurrentTheme();
                     ThemeManager.CustomTheme created = themeManager.createCustomTheme("Custom " + idx, base);
-                    // start editing name immediately
                     themeNameTarget = created;
-                    themeNameBuffer = created.getName();
+                    themeNameBuffer = created.getName() == null ? "" : created.getName();
                     themeNameEditing = true;
                     try { NexusVisual.getInstance().getConfigManager().saveThemeStore(); } catch (Exception ignored) {}
                     playToggleSound(true);
                     return true;
                 }
                 themeY += itemH + itemGap;
-
                 for (ThemeManager.Theme theme : themeManager.getAvailableThemes()) {
                     if (mouseX >= modulesX && mouseX <= modulesX + modulesW && mouseY >= themeY && mouseY <= themeY + itemH) {
                         if (button == 1 && theme instanceof ThemeManager.CustomTheme ct) {
-                            // delete custom theme
                             if (themeNameTarget == ct) {
                                 themeNameEditing = false;
                                 themeNameTarget = null;
@@ -1309,8 +1367,8 @@ public class ClickGui extends Screen implements Wrapper {
             }
         }
 
-        // Theme editor interactions (name + color wheel)
-        if (selectedCategory == Category.Theme && (themeManager.getCurrentTheme() instanceof ThemeManager.CustomTheme ct) && button == 0) {
+        // Theme editor interactions (inside ClickGUI)
+        if (selectedCategory == Category.Theme && (themeManager.getCurrentTheme() instanceof ThemeManager.CustomTheme ct)) {
             float panelX = modulesX + modulesW + settingsGap;
             float panelY = modulesY;
             float panelW = settingsW;
@@ -1321,7 +1379,7 @@ public class ClickGui extends Screen implements Wrapper {
                 float delH = 16f;
                 float delX = panelX + panelW - 10f - delW;
                 float delY = panelY + 10f;
-                if (mouseX >= delX && mouseX <= delX + delW && mouseY >= delY && mouseY <= delY + delH) {
+                if (button == 0 && mouseX >= delX && mouseX <= delX + delW && mouseY >= delY && mouseY <= delY + delH) {
                     if (themeNameTarget == ct) {
                         themeNameEditing = false;
                         themeNameTarget = null;
@@ -1342,27 +1400,27 @@ public class ClickGui extends Screen implements Wrapper {
                 float nameW = panelW - 20f;
                 float nameH = 18f;
                 boolean inName = mouseX >= px && mouseX <= px + nameW && mouseY >= nameBoxY && mouseY <= nameBoxY + nameH;
-                if (inName) {
+                if (button == 0 && inName) {
                     themeNameTarget = ct;
                     themeNameBuffer = ct.getName() == null ? "" : ct.getName();
                     themeNameEditing = true;
                     return true;
-                } else if (themeNameEditing) {
+                } else if (button == 0 && themeNameEditing) {
                     applyThemeNameEdit();
                 }
 
-                // Target buttons
+                // Target button (single square): click to cycle BG / SEC / ACC
                 py = nameBoxY + nameH + 10f;
-                float btnW = (panelW - 20f - 8f) / 3f;
-                float btnH = 18f;
-                for (int i = 0; i < 3; i++) {
-                    float bx = px + i * (btnW + 4f);
-                    if (mouseX >= bx && mouseX <= bx + btnW && mouseY >= py && mouseY <= py + btnH) {
-                        themeColorTarget = i;
-                        return true;
-                    }
+                float btnS = 18f;
+                float bx = px + (panelW - 20f - btnS) / 2f;
+                if (mouseX >= bx && mouseX <= bx + btnS && mouseY >= py && mouseY <= py + btnS) {
+                    themeColorTarget = (themeColorTarget + 1) % 3;
+                    return true;
                 }
-                py += btnH + 10f;
+                py += btnS + 10f;
+
+                // Wheel + alpha slider: left mouse only
+                if (button != 0) return true;
 
                 // Wheel
                 float reserveAfterWheel = 34f; // space for alpha slider
