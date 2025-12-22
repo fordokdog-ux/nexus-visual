@@ -26,6 +26,7 @@ export function getPool() {
 }
 
 export async function ensureSchema(client) {
+  // Таблица кодов активации
   await client.query(`
     CREATE TABLE IF NOT EXISTS codes (
       code TEXT PRIMARY KEY,
@@ -33,7 +34,31 @@ export async function ensureSchema(client) {
       bound_uuid TEXT,
       bound_hwid TEXT,
       created_at BIGINT NOT NULL,
-      used_at BIGINT
+      used_at BIGINT,
+      expires_at BIGINT,
+      revoked BOOLEAN NOT NULL DEFAULT FALSE,
+      revoked_at BIGINT,
+      revoke_reason TEXT,
+      duration_days INTEGER,
+      note TEXT
     );
   `);
+
+  // Добавляем новые колонки если их нет (для миграции)
+  const cols = ['expires_at', 'revoked', 'revoked_at', 'revoke_reason', 'duration_days', 'note'];
+  for (const col of cols) {
+    try {
+      if (col === 'revoked') {
+        await client.query(`ALTER TABLE codes ADD COLUMN IF NOT EXISTS ${col} BOOLEAN NOT NULL DEFAULT FALSE`);
+      } else if (col === 'duration_days') {
+        await client.query(`ALTER TABLE codes ADD COLUMN IF NOT EXISTS ${col} INTEGER`);
+      } else if (col === 'expires_at' || col === 'revoked_at') {
+        await client.query(`ALTER TABLE codes ADD COLUMN IF NOT EXISTS ${col} BIGINT`);
+      } else {
+        await client.query(`ALTER TABLE codes ADD COLUMN IF NOT EXISTS ${col} TEXT`);
+      }
+    } catch (e) {
+      // Колонка уже существует - игнорируем
+    }
+  }
 }

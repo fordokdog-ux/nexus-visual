@@ -35,17 +35,37 @@ export default async function handler(req, res) {
     return;
   }
 
+  // Параметры из тела запроса
+  const durationDays = req.body?.duration_days ?? req.body?.durationDays ?? null;
+  const note = req.body?.note ?? null;
+
   const pool = getPool();
   const client = await pool.connect();
 
   try {
     await ensureSchema(client);
     const code = createCode();
+    const createdAt = nowSec();
+
+    // Вычисляем время истечения (если указан срок)
+    let expiresAt = null;
+    if (durationDays !== null && durationDays > 0) {
+      // expires_at вычисляется от момента АКТИВАЦИИ, но мы запишем duration_days
+      // чтобы при активации посчитать правильно
+    }
+
     await client.query(
-      'INSERT INTO codes(code, used, bound_uuid, bound_hwid, created_at, used_at) VALUES($1, FALSE, NULL, NULL, $2, NULL)',
-      [code, nowSec()]
+      `INSERT INTO codes(code, used, bound_uuid, bound_hwid, created_at, used_at, expires_at, revoked, revoked_at, revoke_reason, duration_days, note)
+       VALUES($1, FALSE, NULL, NULL, $2, NULL, NULL, FALSE, NULL, NULL, $3, $4)`,
+      [code, createdAt, durationDays, note]
     );
-    res.status(200).json({ code });
+
+    res.status(200).json({
+      code,
+      duration_days: durationDays,
+      note,
+      created_at: createdAt
+    });
   } catch (e) {
     res.status(500).json({ error: e?.message || 'error' });
   } finally {

@@ -51,7 +51,7 @@ https://<твой-проект>.vercel.app/api
 Чтобы не пересобирать мод под новый URL, можно создать файл:
 
 ```
-<minecraft runDirectory>/simplevisuals/license_server.txt
+<minecraft runDirectory>/nexus/license_server.txt
 ```
 
 и положить туда строку (одна строка):
@@ -83,6 +83,84 @@ cd tools/vercel-lic
 ```
 
 Он выведет новый код формата `NV-XXXX-XXXX-XXXX`.
+
+---
+
+## Управление ключами (Admin Panel)
+
+Для управления ключами используй скрипт `tools/vercel-lic/admin.ps1`
+
+### Создание ключа
+
+```powershell
+# Бессрочный ключ
+./admin.ps1 -Action create -BaseUrl "https://<проект>.vercel.app/api" -AdminToken "<TOKEN>"
+
+# Ключ на 7 дней
+./admin.ps1 -Action create -BaseUrl "https://<проект>.vercel.app/api" -AdminToken "<TOKEN>" -Days 7
+
+# Ключ на 30 дней с заметкой
+./admin.ps1 -Action create -BaseUrl "https://<проект>.vercel.app/api" -AdminToken "<TOKEN>" -Days 30 -Note "Для Васи"
+```
+
+### Список всех ключей
+
+```powershell
+./admin.ps1 -Action list -BaseUrl "https://<проект>.vercel.app/api" -AdminToken "<TOKEN>"
+```
+
+Покажет все ключи с их статусами: `ACTIVE`, `UNUSED`, `EXPIRED`, `REVOKED`
+
+### Отзыв ключа (забрать у игрока)
+
+```powershell
+# Отозвать ключ
+./admin.ps1 -Action revoke -BaseUrl "..." -AdminToken "..." -Code "NV-XXXX-XXXX-XXXX" -Reason "Читер"
+
+# Вернуть отозванный ключ
+./admin.ps1 -Action unrevoke -BaseUrl "..." -AdminToken "..." -Code "NV-XXXX-XXXX-XXXX"
+```
+
+### Продление срока действия
+
+```powershell
+# Продлить на 30 дней
+./admin.ps1 -Action extend -BaseUrl "..." -AdminToken "..." -Code "NV-XXXX-XXXX-XXXX" -Days 30
+```
+
+### Сброс HWID (привязки к ПК)
+
+Если игрок сменил ПК и хочет активировать на новом:
+
+```powershell
+./admin.ps1 -Action reset_hwid -BaseUrl "..." -AdminToken "..." -Code "NV-XXXX-XXXX-XXXX"
+```
+
+### Удаление ключа
+
+```powershell
+./admin.ps1 -Action delete -BaseUrl "..." -AdminToken "..." -Code "NV-XXXX-XXXX-XXXX"
+```
+
+---
+
+### API Endpoints
+
+| Endpoint | Метод | Описание |
+|----------|-------|----------|
+| `/api/admin_create_code` | POST | Создать ключ (body: `{duration_days?, note?}`) |
+| `/api/admin_list` | GET | Список всех ключей |
+| `/api/admin_revoke` | POST | Отозвать ключ (body: `{code, reason?}`) |
+| `/api/admin_unrevoke` | POST | Снять отзыв (body: `{code}`) |
+| `/api/admin_extend` | POST | Продлить срок (body: `{code, days}`) |
+| `/api/admin_reset_hwid` | POST | Сброс привязки (body: `{code}`) |
+| `/api/admin_delete` | POST | Удалить ключ (body: `{code}`) |
+| `/api/redeem` | POST | Активация ключа (клиент) |
+| `/api/health` | GET | Проверка работы сервера |
+
+Все admin-эндпоинты требуют заголовок: `Authorization: Bearer <NV_ADMIN_TOKEN>`
+
+---
 
 ### Локальный тест (на своём ПК)
 # Stable

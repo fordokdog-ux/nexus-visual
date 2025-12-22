@@ -39,7 +39,7 @@ export default async function handler(req, res) {
     await ensureSchema(client);
 
     const rowRes = await client.query(
-      'SELECT code, used, bound_uuid, bound_hwid FROM codes WHERE code = $1 FOR UPDATE',
+      'SELECT code, used, bound_uuid, bound_hwid, expires_at, revoked, duration_days FROM codes WHERE code = $1 FOR UPDATE',
       [code]
     );
 
@@ -51,12 +51,38 @@ export default async function handler(req, res) {
 
     const row = rowRes.rows[0];
 
+    // Проверка: ключ отозван
+    if (row.revoked) {
+      await client.query('ROLLBACK');
+      res.status(403).json({ error: 'code_revoked' });
+      return;
+    }
+
+    // Проверка: ключ истёк (если уже активирован и есть expires_at)
+    if (row.used && row.expires_at) {
+      const now = nowSec();
+      if (now > row.expires_at) {
+        await client.query('ROLLBACK');
+        res.status(403).json({ error: 'code_expired' });
+        return;
+      }
+    }
+
+    let expiresAt = row.expires_at;
+
     if (!row.used) {
+      // Первая активация - вычисляем expires_at если есть duration_days
+      const now = nowSec();
+      if (row.duration_days && row.duration_days > 0) {
+        expiresAt = now + (row.duration_days * 24 * 60 * 60);
+      }
+
       await client.query(
-        'UPDATE codes SET used = TRUE, bound_uuid = $1, bound_hwid = $2, used_at = $3 WHERE code = $4',
-        [uuid, hwid, nowSec(), code]
+        'UPDATE codes SET used = TRUE, bound_uuid = $1, bound_hwid = $2, used_at = $3, expires_at = $4 WHERE code = $5',
+        [uuid, hwid, now, expiresAt, code]
       );
     } else {
+      // Повторная активация - проверяем uuid/hwid
       if ((row.bound_uuid || '') !== uuid || (row.bound_hwid || '') !== hwid) {
         await client.query('ROLLBACK');
         res.status(403).json({ error: 'code_already_used' });
@@ -66,7 +92,12 @@ export default async function handler(req, res) {
 
     await client.query('COMMIT');
 
+    // Формируем payload с exp если есть срок
     const payload = { uuid, hwid };
+    if (expiresAt) {
+      payload.exp = expiresAt;
+    }
+
     const payloadJson = JSON.stringify(payload);
     const signature = signPayload(payloadJson);
 
@@ -74,7 +105,8 @@ export default async function handler(req, res) {
       license: {
         payload: payloadJson,
         signature
-      }
+      },
+      expires_at: expiresAt || null
     });
   } catch (e) {
     try { await client.query('ROLLBACK'); } catch {}
