@@ -33,3 +33,6 @@ tools/vercel-lic/_keygen_output.txt
 
 .vercel
 .env*.local
+
+.gradle-alt/
+
