@@ -24,10 +24,17 @@ export default async function handler(req, res) {
   try {
     await ensureSchema(client);
 
-    // Ищем ключ по uuid и hwid
+    // Ищем ключ по hwid (основной критерий привязки)
+    // UUID может меняться при смене аккаунта на том же ПК
+    // ВАЖНО: сортируем так, чтобы сначала шли активные неотозванные ключи,
+    // иначе если у юзера был отозванный ключ и он получил новый - найдём старый отозванный
     const rowRes = await client.query(
-      'SELECT code, used, bound_uuid, bound_hwid, expires_at, revoked, revoke_reason FROM codes WHERE bound_uuid = $1 AND bound_hwid = $2',
-      [uuid, hwid]
+      `SELECT code, used, bound_uuid, bound_hwid, expires_at, revoked, revoke_reason 
+       FROM codes 
+       WHERE bound_hwid = $1 
+       ORDER BY revoked ASC, used_at DESC NULLS LAST 
+       LIMIT 1`,
+      [hwid]
     );
 
     if (rowRes.rowCount === 0) {
